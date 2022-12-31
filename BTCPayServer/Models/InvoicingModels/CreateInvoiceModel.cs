@@ -1,7 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using BTCPayServer.Services.Apps;
 using BTCPayServer.Validation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -9,18 +10,10 @@ namespace BTCPayServer.Models.InvoicingModels
 {
     public class CreateInvoiceModel
     {
-        public CreateInvoiceModel()
-        {
-            Currency = "USD";
-        }
-
-        [Required]
         public decimal? Amount
         {
             get; set;
         }
-
-        [Required]
         public string Currency
         {
             get; set;
@@ -45,13 +38,19 @@ namespace BTCPayServer.Models.InvoicingModels
             get; set;
         }
 
+        [DisplayName("Default payment method on checkout")]
+        public string DefaultPaymentMethod
+        {
+            get; set;
+        }
+
         [DisplayName("POS Data")]
         public string PosData
         {
             get; set;
         }
 
-        [EmailAddress]
+        [MailboxAddress]
         [DisplayName("Buyer Email")]
         public string BuyerEmail
         {
@@ -59,13 +58,8 @@ namespace BTCPayServer.Models.InvoicingModels
         }
 
         [Uri]
-        [DisplayName("Notification Url")]
+        [DisplayName("Notification URL")]
         public string NotificationUrl
-        {
-            get; set;
-        }
-
-        public SelectList Stores
         {
             get; set;
         }
@@ -81,5 +75,20 @@ namespace BTCPayServer.Models.InvoicingModels
         {
             get; set;
         }
+
+        [MailboxAddress]
+        [DisplayName("Notification Email")]
+        public string NotificationEmail
+        {
+            get; set;
+        }
+
+        [DisplayName("Require Refund Email")]
+        public RequiresRefundEmail RequiresRefundEmail
+        {
+            get; set;
+        }
+
+        public bool UseNewCheckout { get; set; }
     }
 }

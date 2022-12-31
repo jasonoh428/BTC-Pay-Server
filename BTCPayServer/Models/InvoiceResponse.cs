@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using BTCPayServer.Client.Models;
+using BTCPayServer.Services.Invoices;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer.Models
@@ -79,7 +82,7 @@ namespace BTCPayServer.Models
         }
 
         [JsonProperty("cryptoInfo")]
-        public List<NBitpayClient.InvoiceCryptoInfo> CryptoInfo { get; set; }
+        public List<InvoiceCryptoInfo> CryptoInfo { get; set; }
 
         //"price":5
         [JsonProperty("price")]
@@ -262,9 +265,11 @@ namespace BTCPayServer.Models
         [JsonProperty("addresses")]
         public Dictionary<string, string> Addresses { get; set; }
         [JsonProperty("paymentCodes")]
-        public Dictionary<string, NBitpayClient.InvoicePaymentUrls> PaymentCodes { get; set; }
+        public Dictionary<string, InvoiceCryptoInfo.InvoicePaymentUrls> PaymentCodes { get; set; }
         [JsonProperty("buyer")]
         public JObject Buyer { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
+        public CheckoutType? CheckoutType { get; set; }
     }
     public class Flags
     {

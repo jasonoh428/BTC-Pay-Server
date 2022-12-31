@@ -1,4 +1,4 @@
-﻿var vault = (function () {
+var vault = (function () {
     /** @param {WebSocket} websocket
     */
     function VaultBridge(websocket) {
@@ -20,12 +20,17 @@
         };
         this.socket.onmessage = function (event) {
             if (typeof event.data === "string") {
+                if (event.data === "ping")
+                    return;
                 var jsonObject = JSON.parse(event.data);
                 if (jsonObject.hasOwnProperty("params")) {
                     var request = new XMLHttpRequest();
                     request.onreadystatechange = function () {
                         if (request.readyState == 4 && request.status == 200) {
-                            self.socket.send(request.responseText);
+                            if (self.socket.readyState == 1)
+                                self.socket.send(request.responseText);
+                            else
+                                self.onerror(vault.errors.socketError);
                         }
                         if (request.readyState == 4 && request.status == 0) {
                             self.onerror(vault.errors.notRunning);
@@ -97,7 +102,7 @@
             notRunning: "NotRunning",
             denied: "Denied",
             socketNotSupported: "SocketNotSupported",
-            socketError: "SocketError",
+            socketError: "SocketError"
         },
         askVaultPermission: askVaultPermission,
         connectToBackendSocket: connectToBackendSocket,

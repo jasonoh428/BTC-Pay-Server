@@ -12,16 +12,27 @@ namespace BTCPayServer.Client
         public const string CanUseLightningNodeInStore = "btcpay.store.canuselightningnode";
         public const string CanModifyServerSettings = "btcpay.server.canmodifyserversettings";
         public const string CanModifyStoreSettings = "btcpay.store.canmodifystoresettings";
+        public const string CanModifyStoreWebhooks = "btcpay.store.webhooks.canmodifywebhooks";
         public const string CanModifyStoreSettingsUnscoped = "btcpay.store.canmodifystoresettings:";
         public const string CanViewStoreSettings = "btcpay.store.canviewstoresettings";
         public const string CanViewInvoices = "btcpay.store.canviewinvoices";
         public const string CanCreateInvoice = "btcpay.store.cancreateinvoice";
+        public const string CanModifyInvoices = "btcpay.store.canmodifyinvoices";
         public const string CanViewPaymentRequests = "btcpay.store.canviewpaymentrequests";
         public const string CanModifyPaymentRequests = "btcpay.store.canmodifypaymentrequests";
         public const string CanModifyProfile = "btcpay.user.canmodifyprofile";
         public const string CanViewProfile = "btcpay.user.canviewprofile";
+        public const string CanManageNotificationsForUser = "btcpay.user.canmanagenotificationsforuser";
+        public const string CanViewNotificationsForUser = "btcpay.user.canviewnotificationsforuser";
+        public const string CanViewUsers = "btcpay.server.canviewusers";
         public const string CanCreateUser = "btcpay.server.cancreateuser";
+        public const string CanDeleteUser = "btcpay.user.candeleteuser";
         public const string CanManagePullPayments = "btcpay.store.canmanagepullpayments";
+        public const string CanViewCustodianAccounts = "btcpay.store.canviewcustodianaccounts";
+        public const string CanManageCustodianAccounts = "btcpay.store.canmanagecustodianaccounts";
+        public const string CanDepositToCustodianAccounts = "btcpay.store.candeposittocustodianaccount";
+        public const string CanWithdrawFromCustodianAccounts = "btcpay.store.canwithdrawfromcustodianaccount";
+        public const string CanTradeCustodianAccount = "btcpay.store.cantradecustodianaccount";
         public const string Unrestricted = "unrestricted";
         public static IEnumerable<string> AllPolicies
         {
@@ -29,6 +40,8 @@ namespace BTCPayServer.Client
             {
                 yield return CanViewInvoices;
                 yield return CanCreateInvoice;
+                yield return CanModifyInvoices;
+                yield return CanModifyStoreWebhooks;
                 yield return CanModifyServerSettings;
                 yield return CanModifyStoreSettings;
                 yield return CanViewStoreSettings;
@@ -36,13 +49,22 @@ namespace BTCPayServer.Client
                 yield return CanModifyPaymentRequests;
                 yield return CanModifyProfile;
                 yield return CanViewProfile;
+                yield return CanViewUsers;
                 yield return CanCreateUser;
+                yield return CanDeleteUser;
+                yield return CanManageNotificationsForUser;
+                yield return CanViewNotificationsForUser;
                 yield return Unrestricted;
                 yield return CanUseInternalLightningNode;
                 yield return CanCreateLightningInvoiceInternalNode;
                 yield return CanUseLightningNodeInStore;
                 yield return CanCreateLightningInvoiceInStore;
                 yield return CanManagePullPayments;
+                yield return CanViewCustodianAccounts;
+                yield return CanManageCustodianAccounts;
+                yield return CanDepositToCustodianAccounts;
+                yield return CanWithdrawFromCustodianAccounts;
+                yield return CanTradeCustodianAccount;
             }
         }
         public static bool IsValidPolicy(string policy)
@@ -61,6 +83,10 @@ namespace BTCPayServer.Client
         public static bool IsServerPolicy(string policy)
         {
             return policy.StartsWith("btcpay.server", StringComparison.OrdinalIgnoreCase);
+        }
+        public static bool IsPluginPolicy(string policy)
+        {
+            return policy.StartsWith("btcpay.plugin", StringComparison.OrdinalIgnoreCase);
         }
     }
     public class Permission
@@ -156,15 +182,25 @@ namespace BTCPayServer.Client
             switch (subpolicy)
             {
                 case Policies.CanViewInvoices when this.Policy == Policies.CanModifyStoreSettings:
+                case Policies.CanViewInvoices when this.Policy == Policies.CanModifyInvoices:
+                case Policies.CanModifyStoreWebhooks when this.Policy == Policies.CanModifyStoreSettings:
                 case Policies.CanViewInvoices when this.Policy == Policies.CanViewStoreSettings:
                 case Policies.CanViewStoreSettings when this.Policy == Policies.CanModifyStoreSettings:
                 case Policies.CanCreateInvoice when this.Policy == Policies.CanModifyStoreSettings:
+                case Policies.CanModifyInvoices when this.Policy == Policies.CanModifyStoreSettings:
                 case Policies.CanViewProfile when this.Policy == Policies.CanModifyProfile:
                 case Policies.CanModifyPaymentRequests when this.Policy == Policies.CanModifyStoreSettings:
                 case Policies.CanViewPaymentRequests when this.Policy == Policies.CanModifyStoreSettings:
+                case Policies.CanManagePullPayments when this.Policy == Policies.CanModifyStoreSettings:
                 case Policies.CanViewPaymentRequests when this.Policy == Policies.CanViewStoreSettings:
+                case Policies.CanViewPaymentRequests when this.Policy == Policies.CanModifyPaymentRequests:
                 case Policies.CanCreateLightningInvoiceInternalNode when this.Policy == Policies.CanUseInternalLightningNode:
                 case Policies.CanCreateLightningInvoiceInStore when this.Policy == Policies.CanUseLightningNodeInStore:
+                case Policies.CanViewNotificationsForUser when this.Policy == Policies.CanManageNotificationsForUser:
+                case Policies.CanUseInternalLightningNode when this.Policy == Policies.CanModifyServerSettings:
+                case Policies.CanViewCustodianAccounts when this.Policy == Policies.CanManageCustodianAccounts:
+                case Policies.CanViewCustodianAccounts when this.Policy == Policies.CanModifyStoreSettings:
+                case Policies.CanManageCustodianAccounts when this.Policy == Policies.CanModifyStoreSettings:
                     return true;
                 default:
                     return false;

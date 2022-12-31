@@ -29,15 +29,25 @@ namespace BTCPayServer.Client.Models
         public string LightningDescriptionTemplate { get; set; }
         public double PaymentTolerance { get; set; } = 0;
         public bool AnyoneCanCreateInvoice { get; set; }
+        public string DefaultCurrency { get; set; }
+        public bool RequiresRefundEmail { get; set; }
+        [JsonConverter(typeof(StringEnumConverter))]
+        public CheckoutType CheckoutType { get; set; }
+        public bool LightningAmountInSatoshi { get; set; }
+        public bool LightningPrivateRouteHints { get; set; }
+        public bool OnChainWithLnInvoiceFallback { get; set; }
+        public bool LazyPaymentMethods { get; set; }
+        public bool RedirectAutomatically { get; set; }
 
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public bool ShowRecommendedFee { get; set; } = true;
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public int RecommendedFeeBlockTarget { get; set; } = 1;
 
+        public string DefaultPaymentMethod { get; set; }
+
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string DefaultLang { get; set; } = "en";
-        public bool LightningAmountInSatoshi { get; set; }
 
         public string CustomLogo { get; set; }
 
@@ -45,20 +55,23 @@ namespace BTCPayServer.Client.Models
 
         public string HtmlTitle { get; set; }
 
-        public bool RedirectAutomatically { get; set; }
-
-        public bool RequiresRefundEmail { get; set; }
-
         [JsonConverter(typeof(StringEnumConverter))]
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public NetworkFeeMode NetworkFeeMode { get; set; } = NetworkFeeMode.Never;
 
         public bool PayJoinEnabled { get; set; }
-        public bool LightningPrivateRouteHints { get; set; }
+        
+        public InvoiceData.ReceiptOptions Receipt { get; set; }
 
 
         [JsonExtensionData]
         public IDictionary<string, JToken> AdditionalData { get; set; }
+    }
+
+    public enum CheckoutType
+    {
+        V1,
+        V2
     }
 
     public enum NetworkFeeMode

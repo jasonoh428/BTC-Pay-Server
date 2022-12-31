@@ -12,20 +12,19 @@ namespace BTCPayServer
             {
                 CryptoCode = nbxplorerNetwork.CryptoCode,
                 DisplayName = "Dash",
-                BlockExplorerLink = NetworkType == NetworkType.Mainnet
+                BlockExplorerLink = NetworkType == ChainName.Mainnet
                     ? "https://insight.dash.org/insight/tx/{0}"
                     : "https://testnet-insight.dashevo.org/insight/tx/{0}",
                 NBXplorerNetwork = nbxplorerNetwork,
-                UriScheme = "dash",
                 DefaultRateRules = new[]
                     {
                         "DASH_X = DASH_BTC * BTC_X",
-                        "DASH_BTC = bittrex(DASH_BTC)"
+                        "DASH_BTC = bitfinex(DSH_BTC)"
                     },
                 CryptoImagePath = "imlegacy/dash.png",
                 DefaultSettings = BTCPayDefaultSettings.GetDefaultSettings(NetworkType),
                 //https://github.com/satoshilabs/slips/blob/master/slip-0044.md
-                CoinType = NetworkType == NetworkType.Mainnet ? new KeyPath("5'")
+                CoinType = NetworkType == ChainName.Mainnet ? new KeyPath("5'")
                     : new KeyPath("1'")
             });
         }

@@ -1,7 +1,7 @@
 {
   "NOTICE_WARN": "THIS CODE HAS BEEN AUTOMATICALLY GENERATED FROM TRANSIFEX, IF YOU WISH TO HELP TRANSLATION COME ON THE SLACK http://slack.btcpayserver.org TO REQUEST PERMISSION TO https://www.transifex.com/btcpayserver/btcpayserver/",
   "code": "fi-FI",
-  "currentLanguage": "Englanti",
+  "currentLanguage": "Suomi",
   "lang": "Kieli",
   "Awaiting Payment...": "Odotaa maksua...",
   "Pay with": "Maksa käyttämällä",
@@ -48,5 +48,6 @@
   "Pay with Changelly": "Maksa käyttäen Changelly:ä",
   "Close": "Sulje",
   "NotPaid_ExtraTransaction": "Laskua ei ole maksettu kokonaan. Lähetä uusi maksu erääntyvän summan kattamiseksi.",
-  "Recommended_Fee": "Suositeltu siirtomaksu: {{feeRate}} sat/tavu"
+  "Recommended_Fee": "Suositeltu siirtomaksu: {{feeRate}} sat/tavu",
+  "View receipt": "View receipt"
 }

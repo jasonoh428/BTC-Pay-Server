@@ -1,4 +1,6 @@
 using System;
+using BTCPayServer.Client.Models;
+using BTCPayServer.Controllers.Greenfield;
 using BTCPayServer.Payments.Lightning;
 using BTCPayServer.Services.Invoices;
 using NBitcoin;
@@ -11,16 +13,13 @@ namespace BTCPayServer.Payments
     {
         public static LightningPaymentType Instance { get; } = new LightningPaymentType();
 
-        private LightningPaymentType()
-        {
-        }
+        private protected LightningPaymentType() { }
 
         public override string ToPrettyString() => "Off-Chain";
         public override string GetId() => "LightningLike";
-        public override string ToStringNormalized()
-        {
-            return "LightningNetwork";
-        }
+        public override string GetBadge() => "⚡";
+        public override string ToStringNormalized() => "LightningNetwork";
+
         public override CryptoPaymentData DeserializePaymentData(BTCPayNetworkBase network, string str)
         {
             return ((BTCPayNetwork)network)?.ToObject<LightningLikePaymentData>(str);
@@ -33,7 +32,7 @@ namespace BTCPayServer.Payments
 
         public override IPaymentMethodDetails DeserializePaymentMethodDetails(BTCPayNetworkBase network, string str)
         {
-            return JsonConvert.DeserializeObject<Payments.Lightning.LightningLikePaymentMethodDetails>(str);
+            return JsonConvert.DeserializeObject<LightningLikePaymentMethodDetails>(str);
         }
 
         public override string SerializePaymentMethodDetails(BTCPayNetworkBase network, IPaymentMethodDetails details)
@@ -55,10 +54,47 @@ namespace BTCPayServer.Payments
         public override string GetPaymentLink(BTCPayNetworkBase network, IPaymentMethodDetails paymentMethodDetails,
             Money cryptoInfoDue, string serverUri)
         {
-            return
-                $"lightning:{paymentMethodDetails.GetPaymentDestination().ToUpperInvariant().Replace("LIGHTNING:", "", StringComparison.InvariantCultureIgnoreCase)}";
+            if (!paymentMethodDetails.Activated)
+            {
+                return string.Empty;
+            }
+            var lnInvoiceTrimmedOfScheme = paymentMethodDetails.GetPaymentDestination().ToLowerInvariant()
+                .Replace("lightning:", "", StringComparison.InvariantCultureIgnoreCase);
+
+            return $"lightning:{lnInvoiceTrimmedOfScheme}";
         }
 
-        public override string InvoiceViewPaymentPartialName { get; } = "ViewLightningLikePaymentData";
+        public override string InvoiceViewPaymentPartialName { get; } = "Lightning/ViewLightningLikePaymentData";
+
+        public override object GetGreenfieldData(ISupportedPaymentMethod supportedPaymentMethod, bool canModifyStore)
+        {
+            if (supportedPaymentMethod is LightningSupportedPaymentMethod lightningSupportedPaymentMethod)
+                return new LightningNetworkPaymentMethodBaseData()
+                {
+                    ConnectionString = lightningSupportedPaymentMethod.IsInternalNode
+                        ?
+                        lightningSupportedPaymentMethod.GetDisplayableConnectionString()
+                        :
+                        canModifyStore
+                            ? lightningSupportedPaymentMethod.GetDisplayableConnectionString()
+                            :
+                            "*NEED CanModifyStoreSettings PERMISSION TO VIEW*"
+                };
+            return null;
+        }
+
+        public override bool IsPaymentType(string paymentType)
+        {
+            return paymentType?.Equals("offchain", StringComparison.InvariantCultureIgnoreCase) is true || base.IsPaymentType(paymentType);
+        }
+
+        public override void PopulateCryptoInfo(PaymentMethod details, InvoiceCryptoInfo invoiceCryptoInfo, string serverUrl)
+        {
+            invoiceCryptoInfo.PaymentUrls = new InvoiceCryptoInfo.InvoicePaymentUrls()
+            {
+                BOLT11 = GetPaymentLink(details.Network, details.GetPaymentMethodDetails(), invoiceCryptoInfo.Due,
+                    serverUrl)
+            };
+        }
     }
 }

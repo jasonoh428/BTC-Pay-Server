@@ -12,10 +12,29 @@ namespace BTCPayServer.HostedServices
     {
         private CancellationTokenSource _Cts = new CancellationTokenSource();
         protected Task[] _Tasks;
+        public readonly Logs Logs;
+
+        public bool NoLogsOnExit { get; set; }
+
+        protected BaseAsyncService(Logs logs)
+        {
+            Logs = logs;
+        }
+
+        protected BaseAsyncService(ILogger logger)
+        {
+            Logs = new Logs() { PayServer = logger, Events = logger, Configuration = logger};
+        }
 
         public virtual Task StartAsync(CancellationToken cancellationToken)
         {
             _Tasks = InitializeTasks();
+            foreach (var t in _Tasks)
+                t.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        Logs.PayServer.LogWarning(t.Exception, $"Unhanded exception in {this.GetType().Name}");
+                }, TaskScheduler.Default);
             return Task.CompletedTask;
         }
 
@@ -57,9 +76,11 @@ namespace BTCPayServer.HostedServices
             if (_Cts != null)
             {
                 _Cts.Cancel();
-                await Task.WhenAll(_Tasks);
+                if (_Tasks != null)
+                    await Task.WhenAll(_Tasks);
             }
-            Logs.PayServer.LogInformation($"{this.GetType().Name} successfully exited...");
+            if (!NoLogsOnExit)
+                Logs.PayServer.LogInformation($"{this.GetType().Name} successfully exited...");
         }
     }
 }

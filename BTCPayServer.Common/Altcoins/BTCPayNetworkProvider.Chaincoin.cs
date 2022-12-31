@@ -11,11 +11,10 @@ namespace BTCPayServer
             {
                 CryptoCode = nbxplorerNetwork.CryptoCode,
                 DisplayName = "Chaincoin",
-                BlockExplorerLink = NetworkType == NetworkType.Mainnet
+                BlockExplorerLink = NetworkType == ChainName.Mainnet
                     ? "https://explorer.chaincoin.org/Explorer/Transaction/{0}"
                     : "https://test.explorer.chaincoin.org/Explorer/Transaction/tx/{0}",
                 NBXplorerNetwork = nbxplorerNetwork,
-                UriScheme = "chaincoin",
                 DefaultRateRules = new[]
                     {
                         "CHC_X = CHC_BTC * BTC_X",
@@ -24,7 +23,7 @@ namespace BTCPayServer
                 CryptoImagePath = "imlegacy/chaincoin.png",
                 DefaultSettings = BTCPayDefaultSettings.GetDefaultSettings(NetworkType),
                 //https://github.com/satoshilabs/slips/blob/master/slip-0044.md
-                CoinType = NetworkType == NetworkType.Mainnet ? new KeyPath("711'")
+                CoinType = NetworkType == ChainName.Mainnet ? new KeyPath("711'")
                     : new KeyPath("1'")
             });
         }

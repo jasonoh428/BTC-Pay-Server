@@ -1,15 +1,16 @@
 using System;
 using System.Threading.Tasks;
+using BTCPayServer.Logging;
 
 namespace BTCPayServer.Services.Mails
 {
     class ServerEmailSender : EmailSender
     {
         public ServerEmailSender(SettingsRepository settingsRepository,
-                                IBackgroundJobClient backgroundJobClient) : base(backgroundJobClient)
+                                IBackgroundJobClient backgroundJobClient,
+                                Logs logs) : base(backgroundJobClient, logs)
         {
-            if (settingsRepository == null)
-                throw new ArgumentNullException(nameof(settingsRepository));
+            ArgumentNullException.ThrowIfNull(settingsRepository);
             SettingsRepository = settingsRepository;
         }
 

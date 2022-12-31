@@ -16,7 +16,7 @@ namespace BTCPayServer.Client
             var response =
                 await _httpClient.SendAsync(
                     CreateHttpRequest($"api/v1/stores/{storeId}/payment-requests",
-                        new Dictionary<string, object>() {{nameof(includeArchived), includeArchived}}), token);
+                        new Dictionary<string, object>() { { nameof(includeArchived), includeArchived } }), token);
             return await HandleResponse<IEnumerable<PaymentRequestData>>(response);
         }
 
@@ -35,6 +35,20 @@ namespace BTCPayServer.Client
                 CreateHttpRequest($"api/v1/stores/{storeId}/payment-requests/{paymentRequestId}",
                     method: HttpMethod.Delete), token);
             await HandleResponse(response);
+        }
+
+        public virtual async Task<Client.Models.InvoiceData> PayPaymentRequest(string storeId, string paymentRequestId, PayPaymentRequestRequest request, CancellationToken token = default)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+            if (storeId is null)
+                throw new ArgumentNullException(nameof(storeId));
+            if (paymentRequestId is null)
+                throw new ArgumentNullException(nameof(paymentRequestId));
+            var response = await _httpClient.SendAsync(
+                CreateHttpRequest($"api/v1/stores/{storeId}/payment-requests/{paymentRequestId}/pay", bodyPayload: request,
+                    method: HttpMethod.Post), token);
+            return await HandleResponse<Client.Models.InvoiceData>(response);
         }
 
         public virtual async Task<PaymentRequestData> CreatePaymentRequest(string storeId,

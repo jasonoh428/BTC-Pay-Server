@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using BTCPayServer.Client.Models;
+using BTCPayServer.Data;
 using BTCPayServer.Payments;
 using BTCPayServer.Payments.Bitcoin;
 using BTCPayServer.Services.Invoices;
@@ -22,12 +23,15 @@ namespace BTCPayServer.Models.InvoicingModels
         public bool Replaced { get; set; }
         public BitcoinLikePaymentData CryptoPaymentData { get; set; }
         public string AdditionalInformation { get; set; }
+
+        public decimal NetworkFee { get; set; }
     }
 
     public class OffChainPaymentViewModel
     {
         public string Crypto { get; set; }
         public string BOLT11 { get; set; }
+        public PaymentType Type { get; set; }
     }
 
     public class InvoiceDetailsModel
@@ -43,6 +47,8 @@ namespace BTCPayServer.Models.InvoicingModels
             public string Overpaid { get; set; }
             [JsonIgnore]
             public PaymentMethodId PaymentMethodId { get; set; }
+
+            public PaymentMethod PaymentMethodRaw { get; set; }
         }
         public class AddressModel
         {
@@ -60,7 +66,7 @@ namespace BTCPayServer.Models.InvoicingModels
             get; set;
         } = new List<CryptoPayment>();
 
-        public string State
+        public InvoiceState State
         {
             get; set;
         }
@@ -79,9 +85,12 @@ namespace BTCPayServer.Models.InvoicingModels
             get;
             set;
         }
+
+        public List<StoreViewModels.DeliveryViewModel> Deliveries { get; set; } = new List<StoreViewModels.DeliveryViewModel>();
         public string TaxIncluded { get; set; }
 
         public string TransactionSpeed { get; set; }
+        public string StoreId { get; set; }
         public object StoreName
         {
             get;
@@ -92,6 +101,13 @@ namespace BTCPayServer.Models.InvoicingModels
             get;
             set;
         }
+
+        public string PaymentRequestLink
+        {
+            get;
+            set;
+        }
+
         public string NotificationUrl
         {
             get;
@@ -105,7 +121,6 @@ namespace BTCPayServer.Models.InvoicingModels
             set;
         }
         public InvoiceMetadata TypedMetadata { get; set; }
-        public AddressModel[] Addresses { get; set; }
         public DateTimeOffset MonitoringDate { get; internal set; }
         public List<Data.InvoiceEventData> Events { get; internal set; }
         public string NotificationEmail { get; internal set; }
@@ -113,5 +128,12 @@ namespace BTCPayServer.Models.InvoicingModels
         public List<PaymentEntity> Payments { get; set; }
         public bool Archived { get; set; }
         public bool CanRefund { get; set; }
+        public bool ShowCheckout { get; set; }
+        public bool CanMarkSettled { get; set; }
+        public bool CanMarkInvalid { get; set; }
+        public bool CanMarkStatus => CanMarkSettled || CanMarkInvalid;
+        public List<RefundData> Refunds { get; set; }
+        public bool ShowReceipt { get; set; }
+        public bool Overpaid { get; set; } = false;
     }
 }

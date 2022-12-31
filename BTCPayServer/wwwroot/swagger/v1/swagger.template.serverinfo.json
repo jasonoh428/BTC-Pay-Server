@@ -18,11 +18,31 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Missing authorization",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "Unexpected error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [
                     {
-                        "API Key": [],
+                        "API_Key": [],
                         "Basic": []
                     }
                 ]
@@ -89,7 +109,8 @@
                 "properties": {
                     "cryptoCode": {
                         "type": "string",
-                        "description": "The CryptoCode of the crypto currency (eg. BTC)"
+                        "description": "The CryptoCode of the crypto currency (eg. BTC)",
+                        "example": "BTC"
                     },
                     "nodeInformation": {
                         "$ref": "#/components/schemas/ApplicationServerInfoNodeStatusData"
@@ -103,6 +124,11 @@
                         "format": "integer",
                         "nullable": true,
                         "description": "The height of the latest indexed block of the internal indexer"
+                    },
+                    "available": {
+                        "type": "boolean",
+                        "description": "True if the full node and the indexer are fully synchronized",
+                        "nullable": false
                     }
                 }
             }
@@ -110,7 +136,8 @@
     },
     "tags": [
         {
-            "name": "ServerInfo"
+            "name": "ServerInfo",
+            "description": "Server Info operations"
         }
     ]
 }

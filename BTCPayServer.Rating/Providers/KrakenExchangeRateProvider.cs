@@ -16,12 +16,7 @@ namespace BTCPayServer.Services.Rates
     // Make sure that only one request is sent to kraken in general
     public class KrakenExchangeRateProvider : IRateProvider
     {
-        public KrakenExchangeRateProvider()
-        {
-            _Helper = new ExchangeKrakenAPI();
-        }
 
-        readonly ExchangeKrakenAPI _Helper;
         public HttpClient HttpClient
         {
             get
@@ -88,7 +83,8 @@ namespace BTCPayServer.Services.Rates
         {
             var result = new List<PairRate>();
             var symbols = await GetSymbolsAsync(cancellationToken);
-            var normalizedPairsList = symbols.Where(s => !notFoundSymbols.ContainsKey(s)).Select(s => _Helper.NormalizeMarketSymbol(s)).ToList();
+            var helper = (ExchangeKrakenAPI)await ExchangeAPI.GetExchangeAPIAsync<ExchangeKrakenAPI>();
+            var normalizedPairsList = symbols.Where(s => !notFoundSymbols.ContainsKey(s)).Select(s => helper.NormalizeMarketSymbol(s)).ToList();
             var csvPairsList = string.Join(",", normalizedPairsList);
             JToken apiTickers = await MakeJsonRequestAsync<JToken>("/0/public/Ticker", null, new Dictionary<string, object> { { "pair", csvPairsList } }, cancellationToken: cancellationToken);
             var tickers = new List<KeyValuePair<string, ExchangeTicker>>();
@@ -107,14 +103,14 @@ namespace BTCPayServer.Services.Rates
                             var p2 = symbol.Substring(mapped1.KrakenTicker.Length);
                             if (_TickerMapping.TryGetValue(p2, out var mapped2))
                                 p2 = mapped2;
-                            global = $"{p2}_{mapped1.PayTicker}";
+                            global = $"{mapped1.PayTicker}_{p2}";
                         }
                         else
                         {
-                            global = await _Helper.ExchangeMarketSymbolToGlobalMarketSymbolAsync(symbol);
+                            global = await helper.ExchangeMarketSymbolToGlobalMarketSymbolAsync(symbol);
                         }
                         if (CurrencyPair.TryParse(global, out var pair))
-                            result.Add(new PairRate(pair.Inverse(), new BidAsk(ticker.Bid, ticker.Ask)));
+                            result.Add(new PairRate(pair, new BidAsk(ticker.Bid, ticker.Ask)));
                         else
                             notFoundSymbols.TryAdd(symbol, symbol);
                     }
@@ -172,7 +168,7 @@ namespace BTCPayServer.Services.Rates
             sb.Append(url);
             if (payload != null)
             {
-                sb.Append("?");
+                sb.Append('?');
                 sb.Append(String.Join('&', payload.Select(kv => $"{kv.Key}={kv.Value}").OfType<object>().ToArray()));
             }
             var request = new HttpRequestMessage(HttpMethod.Get, sb.ToString());
@@ -181,9 +177,15 @@ namespace BTCPayServer.Services.Rates
             var result = JsonConvert.DeserializeObject<T>(stringResult);
             if (result is JToken json)
             {
+                if (!(json is JArray) && json["result"] is JObject {Count: > 0} pairResult)
+                {
+                    return (T)(object)(pairResult);
+                } 
+                
                 if (!(json is JArray) && json["error"] is JArray error && error.Count != 0)
                 {
-                    throw new APIException(error[0].ToStringInvariant());
+                    throw new APIException(string.Join("\n",
+                        error.Select(token => token.ToStringInvariant()).Distinct()));
                 }
                 result = (T)(object)(json["result"] ?? json);
             }

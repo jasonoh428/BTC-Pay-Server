@@ -1,4 +1,5 @@
 using System;
+using Dapper;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +14,7 @@ using NBitcoin;
 using NBXplorer;
 using NBXplorer.DerivationStrategy;
 using NBXplorer.Models;
+using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer.Services.Wallets
 {
@@ -24,6 +26,8 @@ namespace BTCPayServer.Services.Wallets
         public KeyPath KeyPath { get; set; }
         public IMoney Value { get; set; }
         public Coin Coin { get; set; }
+        public long Confirmations { get; set; }
+        public BitcoinAddress Address { get; set; }
     }
     public class NetworkCoins
     {
@@ -38,18 +42,24 @@ namespace BTCPayServer.Services.Wallets
     }
     public class BTCPayWallet
     {
+        public WalletRepository WalletRepository { get; }
+        public NBXplorerConnectionFactory NbxplorerConnectionFactory { get; }
+        public Logs Logs { get; }
+
         private readonly ExplorerClient _Client;
         private readonly IMemoryCache _MemoryCache;
         public BTCPayWallet(ExplorerClient client, IMemoryCache memoryCache, BTCPayNetwork network,
-            ApplicationDbContextFactory dbContextFactory)
+            WalletRepository walletRepository,
+            ApplicationDbContextFactory dbContextFactory, NBXplorerConnectionFactory nbxplorerConnectionFactory, Logs logs)
         {
-            if (client == null)
-                throw new ArgumentNullException(nameof(client));
-            if (memoryCache == null)
-                throw new ArgumentNullException(nameof(memoryCache));
+            ArgumentNullException.ThrowIfNull(client);
+            ArgumentNullException.ThrowIfNull(memoryCache);
+            Logs = logs;
             _Client = client;
             _Network = network;
+            WalletRepository = walletRepository;
             _dbContextFactory = dbContextFactory;
+            NbxplorerConnectionFactory = nbxplorerConnectionFactory;
             _MemoryCache = memoryCache;
         }
 
@@ -67,10 +77,11 @@ namespace BTCPayServer.Services.Wallets
 
         public TimeSpan CacheSpan { get; private set; } = TimeSpan.FromMinutes(5);
 
-        public async Task<KeyPathInformation> ReserveAddressAsync(DerivationStrategyBase derivationStrategy)
+        public async Task<KeyPathInformation> ReserveAddressAsync(string storeId, DerivationStrategyBase derivationStrategy, string generatedBy)
         {
-            if (derivationStrategy == null)
-                throw new ArgumentNullException(nameof(derivationStrategy));
+            if (storeId != null)
+                ArgumentNullException.ThrowIfNull(generatedBy);
+            ArgumentNullException.ThrowIfNull(derivationStrategy);
             var pathInfo = await _Client.GetUnusedAsync(derivationStrategy, DerivationFeature.Deposit, 0, true).ConfigureAwait(false);
             // Might happen on some broken install
             if (pathInfo == null)
@@ -78,13 +89,18 @@ namespace BTCPayServer.Services.Wallets
                 await _Client.TrackAsync(derivationStrategy).ConfigureAwait(false);
                 pathInfo = await _Client.GetUnusedAsync(derivationStrategy, DerivationFeature.Deposit, 0, true).ConfigureAwait(false);
             }
+            if (storeId != null)
+            {
+                await WalletRepository.EnsureWalletObject(
+                    new WalletObjectId(new WalletId(storeId, Network.CryptoCode), WalletObjectData.Types.Address, pathInfo.Address.ToString()),
+                    new JObject() { ["generatedBy"] = generatedBy });
+            }
             return pathInfo;
         }
 
         public async Task<(BitcoinAddress, KeyPath)> GetChangeAddressAsync(DerivationStrategyBase derivationStrategy)
         {
-            if (derivationStrategy == null)
-                throw new ArgumentNullException(nameof(derivationStrategy));
+            ArgumentNullException.ThrowIfNull(derivationStrategy);
             var pathInfo = await _Client.GetUnusedAsync(derivationStrategy, DerivationFeature.Change, 0, false).ConfigureAwait(false);
             // Might happen on some broken install
             if (pathInfo == null)
@@ -105,8 +121,7 @@ namespace BTCPayServer.Services.Wallets
 
         public async Task<TransactionResult> GetTransactionAsync(uint256 txId, bool includeOffchain = false, CancellationToken cancellation = default(CancellationToken))
         {
-            if (txId == null)
-                throw new ArgumentNullException(nameof(txId));
+            ArgumentNullException.ThrowIfNull(txId);
             var tx = await _Client.GetTransactionAsync(txId, cancellation);
             if (tx is null && includeOffchain)
             {
@@ -199,10 +214,128 @@ namespace BTCPayServer.Services.Wallets
             }
             return await completionSource.Task;
         }
-
-        public async Task<GetTransactionsResponse> FetchTransactions(DerivationStrategyBase derivationStrategyBase)
+        bool? get_wallets_recentBugFixed = null;
+        List<TransactionInformation> dummy = new List<TransactionInformation>();
+        public async Task<IList<TransactionHistoryLine>> FetchTransactionHistory(DerivationStrategyBase derivationStrategyBase, int? skip = null, int? count = null, TimeSpan? interval = null)
         {
-            return _Network.FilterValidTransactions(await _Client.GetTransactionsAsync(derivationStrategyBase));
+            // This is two paths:
+            // * Sometimes we can ask the DB to do the filtering of rows: If that's the case, we should try to filter at the DB level directly as it is the most efficient.
+            // * Sometimes we can't query the DB or the given network need to do additional filtering. In such case, we can't really filter at the DB level, and we need to fetch all transactions in memory.
+            var needAdditionalFiltering = _Network.FilterValidTransactions(dummy) != dummy;
+            if (!NbxplorerConnectionFactory.Available || needAdditionalFiltering)
+            {
+                var txs = await FetchTransactions(derivationStrategyBase);
+                var txinfos = txs.UnconfirmedTransactions.Transactions.Concat(txs.ConfirmedTransactions.Transactions)
+                    .OrderByDescending(t => t.Timestamp)
+                    .Skip(skip is null ? 0 : skip.Value)
+                    .Take(count is null ? int.MaxValue : count.Value);
+                var lines = new List<TransactionHistoryLine>(Math.Min((count is int v ? v : int.MaxValue), txs.UnconfirmedTransactions.Transactions.Count + txs.ConfirmedTransactions.Transactions.Count));
+                DateTimeOffset? timestampLimit = interval is TimeSpan i ? DateTimeOffset.UtcNow - i : null;
+                foreach (var t in txinfos)
+                {
+                    if (timestampLimit is DateTimeOffset l &&
+                        t.Timestamp <= l)
+                        break;
+                    lines.Add(FromTransactionInformation(t));
+                }
+                return lines;
+            }
+            // This call is more efficient for big wallets, as it doesn't need to load all transactions from the history
+            else
+            {
+                await using var ctx = await NbxplorerConnectionFactory.OpenConnection();
+                if (get_wallets_recentBugFixed is null)
+                {
+                    get_wallets_recentBugFixed = await ctx.QuerySingleAsync<bool>("SELECT COUNT(*) = 1 FROM nbxv1_migrations WHERE script_name='011.FixGetWalletsRecent';");
+                }
+                var rows = await ctx.QueryAsync<(string tx_id, DateTimeOffset seen_at, string blk_id, long? blk_height, long balance_change, string asset_id, long confs)>(
+                    "SELECT r.tx_id, r.seen_at, t.blk_id, t.blk_height, r.balance_change, r.asset_id, COALESCE((SELECT height FROM get_tip('BTC')) - t.blk_height + 1, 0) AS confs " +
+                    "FROM get_wallets_recent(@wallet_id, @code, @interval, @count, @skip) r " +
+                    "JOIN txs t USING (code, tx_id) " +
+                    "ORDER BY r.seen_at DESC", new
+                    {
+                        wallet_id = NBXplorer.Client.DBUtils.nbxv1_get_wallet_id(Network.CryptoCode, derivationStrategyBase.ToString()),
+                        code = Network.CryptoCode,
+                        count = get_wallets_recentBugFixed is true ? count : skip + count,
+                        skip = get_wallets_recentBugFixed is true ? skip : 0,
+                        interval = interval is TimeSpan t ? t : TimeSpan.FromDays(365 * 1000)
+                    });
+                rows.TryGetNonEnumeratedCount(out int c);
+                var lines = new List<TransactionHistoryLine>(c);
+                foreach (var row in rows)
+                {
+                    if (get_wallets_recentBugFixed is false)
+                    {
+                        if (skip > 0)
+                        {
+                            // We skip row manually so version of nbx before 2.3.34, return the expected... Remove in a year.
+                            skip--;
+                            continue;
+                        }
+                    }
+                    lines.Add(new TransactionHistoryLine()
+                    {
+                        BalanceChange = string.IsNullOrEmpty(row.asset_id) ? Money.Satoshis(row.balance_change) : new AssetMoney(uint256.Parse(row.asset_id), row.balance_change),
+                        Height = row.blk_height,
+                        SeenAt = row.seen_at,
+                        TransactionId = uint256.Parse(row.tx_id),
+                        Confirmations = row.confs,
+                        BlockHash = string.IsNullOrEmpty(row.asset_id) ? null : uint256.Parse(row.blk_id)
+                    });
+                }
+                return lines;
+            }
+        }
+
+        private static TransactionHistoryLine FromTransactionInformation(TransactionInformation t)
+        {
+            return new TransactionHistoryLine()
+            {
+                BalanceChange = t.BalanceChange,
+                Confirmations = t.Confirmations,
+                Height = t.Height,
+                SeenAt = t.Timestamp,
+                TransactionId = t.TransactionId
+            };
+        }
+
+        private async Task<GetTransactionsResponse> FetchTransactions(DerivationStrategyBase derivationStrategyBase)
+        {
+            var transactions = await _Client.GetTransactionsAsync(derivationStrategyBase);
+            return FilterValidTransactions(transactions);
+        }
+
+        private GetTransactionsResponse FilterValidTransactions(GetTransactionsResponse response)
+        {
+            return new GetTransactionsResponse()
+            {
+                Height = response.Height,
+                UnconfirmedTransactions =
+                    new TransactionInformationSet()
+                    {
+                        Transactions = _Network.FilterValidTransactions(response.UnconfirmedTransactions.Transactions)
+                    },
+                ConfirmedTransactions =
+                    new TransactionInformationSet()
+                    {
+                        Transactions = _Network.FilterValidTransactions(response.ConfirmedTransactions.Transactions)
+                    },
+                ReplacedTransactions = new TransactionInformationSet()
+                {
+                    Transactions = _Network.FilterValidTransactions(response.ReplacedTransactions.Transactions)
+                }
+            };
+        }
+
+        public async Task<TransactionHistoryLine> FetchTransaction(DerivationStrategyBase derivationStrategyBase, uint256 transactionId)
+        {
+            var tx = await _Client.GetTransactionAsync(derivationStrategyBase, transactionId);
+            if (tx is null || !_Network.FilterValidTransactions(new List<TransactionInformation>() { tx }).Any())
+            {
+                return null;
+            }
+
+            return FromTransactionInformation(tx);
         }
 
         public Task<BroadcastResult[]> BroadcastTransactionsAsync(List<Transaction> transactions)
@@ -211,14 +344,15 @@ namespace BTCPayServer.Services.Wallets
             return Task.WhenAll(tasks);
         }
 
-
-
-        public async Task<ReceivedCoin[]> GetUnspentCoins(DerivationStrategyBase derivationStrategy, CancellationToken cancellation = default(CancellationToken))
+        public async Task<ReceivedCoin[]> GetUnspentCoins(
+            DerivationStrategyBase derivationStrategy,
+            bool excludeUnconfirmed = false,
+            CancellationToken cancellation = default(CancellationToken)
+        )
         {
-            if (derivationStrategy == null)
-                throw new ArgumentNullException(nameof(derivationStrategy));
+            ArgumentNullException.ThrowIfNull(derivationStrategy);
             return (await GetUTXOChanges(derivationStrategy, cancellation))
-                          .GetUnspentUTXOs()
+                          .GetUnspentUTXOs(excludeUnconfirmed)
                           .Select(c => new ReceivedCoin()
                           {
                               KeyPath = c.KeyPath,
@@ -226,18 +360,31 @@ namespace BTCPayServer.Services.Wallets
                               Timestamp = c.Timestamp,
                               OutPoint = c.Outpoint,
                               ScriptPubKey = c.ScriptPubKey,
-                              Coin = c.AsCoin(derivationStrategy)
+                              Coin = c.AsCoin(derivationStrategy),
+                              Confirmations = c.Confirmations,
+                              // Some old version of NBX doesn't have Address in this call
+                              Address = c.Address ?? c.ScriptPubKey.GetDestinationAddress(Network.NBitcoinNetwork)
                           }).ToArray();
         }
 
-        public Task<decimal> GetBalance(DerivationStrategyBase derivationStrategy, CancellationToken cancellation = default(CancellationToken))
+        public Task<GetBalanceResponse> GetBalance(DerivationStrategyBase derivationStrategy, CancellationToken cancellation = default(CancellationToken))
         {
             return _MemoryCache.GetOrCreateAsync("CACHEDBALANCE_" + derivationStrategy.ToString(), async (entry) =>
             {
                 var result = await _Client.GetBalanceAsync(derivationStrategy, cancellation);
                 entry.AbsoluteExpiration = DateTimeOffset.UtcNow + CacheSpan;
-                return result.Total.GetValue(_Network);
+                return result;
             });
         }
+    }
+
+    public class TransactionHistoryLine
+    {
+        public DateTimeOffset SeenAt { get; set; }
+        public long? Height { get; set; }
+        public long Confirmations { get; set; }
+        public uint256 TransactionId { get; set; }
+        public uint256 BlockHash { get; set; }
+        public IMoney BalanceChange { get; set; }
     }
 }

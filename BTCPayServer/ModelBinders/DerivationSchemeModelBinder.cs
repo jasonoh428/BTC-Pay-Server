@@ -24,11 +24,6 @@ namespace BTCPayServer.ModelBinders
 
             ValueProviderResult val = bindingContext.ValueProvider.GetValue(
                 bindingContext.ModelName);
-            if (val == null)
-            {
-                return Task.CompletedTask;
-            }
-
             string key = val.FirstValue as string;
             if (key == null)
             {
@@ -37,17 +32,23 @@ namespace BTCPayServer.ModelBinders
 
             var networkProvider = (BTCPayNetworkProvider)bindingContext.HttpContext.RequestServices.GetService(typeof(BTCPayNetworkProvider));
             var cryptoCode = bindingContext.ValueProvider.GetValue("cryptoCode").FirstValue;
-            var network = networkProvider.GetNetwork<BTCPayNetwork>(cryptoCode ?? "BTC");
+            var network = networkProvider.GetNetwork<BTCPayNetwork>(cryptoCode ?? networkProvider.DefaultNetwork.CryptoCode);
             try
             {
                 var data = network.NBXplorerNetwork.DerivationStrategyFactory.Parse(key);
                 if (!bindingContext.ModelType.IsInstanceOfType(data))
                 {
-                    throw new FormatException("Invalid destination type");
+                    bindingContext.Result = ModelBindingResult.Failed();
+                    bindingContext.ModelState.AddModelError(bindingContext.ModelName, "Invalid derivation scheme");
+                    return Task.CompletedTask;
                 }
                 bindingContext.Result = ModelBindingResult.Success(data);
             }
-            catch { throw new FormatException("Invalid derivation scheme"); }
+            catch
+            {
+                bindingContext.Result = ModelBindingResult.Failed();
+                bindingContext.ModelState.AddModelError(bindingContext.ModelName, "Invalid derivation scheme");
+            }
             return Task.CompletedTask;
         }
 

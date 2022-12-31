@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using NBitpayClient;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer.Models
 {
@@ -51,7 +50,9 @@ namespace BTCPayServer.Models
         [JsonProperty(PropertyName = "currency", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string Currency { get; set; }
         [JsonProperty(PropertyName = "price", DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public decimal Price { get; set; }
+        public decimal? Price { get; set; }
+        [JsonProperty(PropertyName = "defaultPaymentMethod", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string DefaultPaymentMethod { get; set; }
         [JsonProperty(PropertyName = "notificationEmail", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string NotificationEmail { get; set; }
         [JsonConverter(typeof(DateTimeJsonConverter))]
@@ -78,6 +79,8 @@ namespace BTCPayServer.Models
 
         [JsonProperty(PropertyName = "redirectAutomatically", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? RedirectAutomatically { get; set; }
+        [JsonProperty(PropertyName = "requiresRefundEmail", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? RequiresRefundEmail { get; set; }
 
         //Bitpay compatibility: create invoice in btcpay uses this instead of supportedTransactionCurrencies
         [JsonProperty(PropertyName = "paymentCurrencies", DefaultValueHandling = DefaultValueHandling.Ignore)]

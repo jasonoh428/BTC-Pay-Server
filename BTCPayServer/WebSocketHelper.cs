@@ -37,7 +37,7 @@ namespace BTCPayServer
             var newSize = _Buffer.Array.Length;
             while (true)
             {
-                var message = await Socket.ReceiveAsync(buffer, cancellation);
+                var message = await Socket.ReceiveAndPingAsync(buffer, cancellation);
                 if (message.MessageType == WebSocketMessageType.Close)
                 {
                     await CloseSocketAndThrow(WebSocketCloseStatus.NormalClosure, "Close message received from the peer", cancellation);
@@ -94,13 +94,9 @@ namespace BTCPayServer
         public async Task Send(string evt, CancellationToken cancellation = default)
         {
             var bytes = UTF8.GetBytes(evt);
-            using (var cts = new CancellationTokenSource(5000))
-            {
-                using (var cts2 = CancellationTokenSource.CreateLinkedTokenSource(cancellation))
-                {
-                    await Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts2.Token);
-                }
-            }
+            using var cts = new CancellationTokenSource(5000);
+            using var cts2 = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+            await Socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts2.Token);
         }
 
         public async Task DisposeAsync(CancellationToken cancellation)

@@ -18,8 +18,7 @@ namespace BTCPayServer.Models.WalletViewModels
             public TimeSpan Target { get; set; }
             public decimal FeeRate { get; set; }
         }
-        public List<TransactionOutput> Outputs { get; set; } = new List<TransactionOutput>();
-
+        public List<TransactionOutput> Outputs { get; set; } = new();
         public class TransactionOutput
         {
             [Display(Name = "Destination Address")]
@@ -33,8 +32,11 @@ namespace BTCPayServer.Models.WalletViewModels
 
             [Display(Name = "Subtract fees from amount")]
             public bool SubtractFeesFromOutput { get; set; }
+
+            public string PayoutId { get; set; }
         }
         public decimal CurrentBalance { get; set; }
+        public decimal ImmatureBalance { get; set; }
 
         public string CryptoCode { get; set; }
 
@@ -47,7 +49,8 @@ namespace BTCPayServer.Models.WalletViewModels
         [Display(Name = "Don't create UTXO change")]
         public bool NoChange { get; set; }
         public decimal? Rate { get; set; }
-        public int Divisibility { get; set; }
+        public int FiatDivisibility { get; set; }
+        public int CryptoDivisibility { get; set; }
         public string Fiat { get; set; }
         public string RateError { get; set; }
         public bool SupportRBF { get; set; }
@@ -64,14 +67,18 @@ namespace BTCPayServer.Models.WalletViewModels
 
         [Display(Name = "UTXOs to spend from")]
         public IEnumerable<string> SelectedInputs { get; set; }
+        
+        public string BackUrl { get; set; }
+        public string ReturnUrl { get; set; }
 
         public class InputSelectionOption
         {
-            public IEnumerable<Label> Labels { get; set; }
+            public IEnumerable<TransactionTagModel> Labels { get; set; }
             public string Comment { get; set; }
             public decimal Amount { get; set; }
             public string Outpoint { get; set; }
             public string Link { get; set; }
+            public long Confirmations { get; set; }
         }
     }
 }

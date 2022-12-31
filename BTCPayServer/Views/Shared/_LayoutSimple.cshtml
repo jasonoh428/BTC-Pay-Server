@@ -1,19 +1,27 @@
-﻿@{
+@inject BTCPayServer.Services.BTCPayServerEnvironment env
+@{
     Layout = null;
 }
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"@(env.IsDeveloping ? " data-devenv" : "")>
 <head>
-    <partial name="Header" />
+    <partial name="LayoutHead" />
+    @await RenderSectionAsync("PageHeadContent", false)
+    <style>
+        .btcpay-footer .flex-xl-row { flex-direction: column !important; }
+        .btcpay-footer .justify-content-xl-start { justify-content: center !important; }
+    </style>
 </head>
-<body>
-    <section class="content-wrapper">
-        <!-- Dummy navbar-brand, hackish way to keep test AssertNoError passing -->
+<body class="d-flex flex-column min-vh-100">
+    <section class="content-wrapper flex-grow-1">
+        @*Dummy navbar-brand, hackish way to keep test AssertNoError passing*@
         <div class="navbar-brand d-none"></div>
         <div class="container">
             @RenderBody()
         </div>
     </section>
-    @await Html.PartialAsync("_ValidationScriptsPartial")
+    <partial name="_Footer"/>
+    <partial name="LayoutFoot" />
+    @await RenderSectionAsync("PageFootContent", false)
 </body>
 </html>

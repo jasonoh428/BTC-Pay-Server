@@ -1,8 +1,9 @@
 #if ALTCOINS
 using System;
 using System.Linq;
+using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Abstractions.Services;
 using BTCPayServer.Configuration;
-using BTCPayServer.Contracts;
 using BTCPayServer.Payments;
 using BTCPayServer.Services.Altcoins.Monero.Configuration;
 using BTCPayServer.Services.Altcoins.Monero.Payments;
@@ -23,7 +24,8 @@ namespace BTCPayServer.Services.Altcoins.Monero
             serviceCollection.AddHostedService<MoneroListener>();
             serviceCollection.AddSingleton<MoneroLikePaymentMethodHandler>();
             serviceCollection.AddSingleton<IPaymentMethodHandler>(provider => provider.GetService<MoneroLikePaymentMethodHandler>());
-            serviceCollection.AddSingleton<IStoreNavExtension, MoneroStoreNavExtension>();
+            serviceCollection.AddSingleton<IUIExtension>(new UIExtension("Monero/StoreNavMoneroExtension",  "store-nav"));
+            serviceCollection.AddSingleton<IUIExtension>(new UIExtension("Monero/StoreWalletsNavMoneroExtension",  "store-wallets-nav"));
             serviceCollection.AddSingleton<ISyncSummaryProvider, MoneroSyncSummaryProvider>();
 
             return serviceCollection;

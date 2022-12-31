@@ -1,12 +1,13 @@
-addLoadEvent(function(){
-var c = document.getElementById("fireworks");
+document.addEventListener("DOMContentLoaded",function (ev) {
+    var c = document.getElementById("fireworks");
+if (!c || !c.getContext) return;
 var ctx = c.getContext("2d");
+if (!ctx) return;
 
 var cH;
 var cW;
 var bgColor = srvModel.animationColors[0];
 var animations = [];
-var circles = [];
 
 var colorPicker = (function() {
     var colors = srvModel.animationColors;
@@ -34,11 +35,6 @@ function calcPageFillRadius(x, y) {
     var h = Math.max(y - 0, cH - y);
     return Math.sqrt(Math.pow(l, 2) + Math.pow(h, 2));
 }
-
-function addClickListeners() {
-    document.addEventListener("touchstart", handleEvent);
-    document.addEventListener("mousedown", handleEvent);
-};
 
 function handleEvent(e) {
     if (e.touches) {
@@ -144,7 +140,7 @@ Circle.prototype.draw = function() {
     ctx.globalAlpha = 1;
 }
 
-var animate = anime({
+anime({
     duration: Infinity,
     update: function() {
         ctx.fillStyle = bgColor;
@@ -169,64 +165,41 @@ var resizeCanvas = function() {
     resizeCanvas();
     
     window.addEventListener("resize", resizeCanvas);
-    // addClickListeners();
-    
-    // handleInactiveUser();
 })();
 
-function handleInactiveUser() {
-    var inactive = setTimeout(function(){
-        fauxClick(cW/2, cH/2);
-    }, 2000);
-
-    function clearInactiveTimeout() {
-        clearTimeout(inactive);
-        document.removeEventListener("mousedown", clearInactiveTimeout);
-        document.removeEventListener("touchstart", clearInactiveTimeout);
-    }
-
-    document.addEventListener("mousedown", clearInactiveTimeout);
-    document.addEventListener("touchstart", clearInactiveTimeout);
-}
-
-function startFauxClicking() {
-    setTimeout(function(){
-        fauxClick(anime.random( cW * .2, cW * .8), anime.random(cH * .2, cH * .8));
-        startFauxClicking();
-    }, anime.random(200, 900));
-}
-
-function fauxClick(x, y) {
+window.fireworks = function(count = 0) {
+    const elem = document.getElementById("fireworks");
+    elem.classList.remove("d-none");
     var fauxClick = new Event("mousedown");
-    fauxClick.pageX = x;
-    fauxClick.pageY = y;
-    document.dispatchEvent(fauxClick);
-}
-
-window.fireworks = function(){
-    var fauxClick = new Event("mousedown");
-    fauxClick.pageX =anime.random( 0, cW );
-    fauxClick.pageY =  anime.random(0, cH );
-
+    fauxClick.pageX = anime.random(0, cW);
+    fauxClick.pageY = anime.random(0, cH);
+    
     var middleSpaceX = cW * 0.6;
     var middleSpaceY = cH * 0.6;
     var middleSpaceX1 = middleSpaceX /2;
     var middleSpaceX2 = middleSpaceX1 + middleSpaceX;
     var middleSpaceY1 = middleSpaceY /2;
     var middleSpaceY2 = middleSpaceY1 + middleSpaceY;
+    
     while(true){
         if(fauxClick.pageX > middleSpaceX1 && fauxClick.pageX < middleSpaceX2){
-            fauxClick.pageX =anime.random( 0, cW );
+            fauxClick.pageX = anime.random( 0, cW );
             continue;
         }
         if(fauxClick.pageY > middleSpaceY1 && fauxClick.pageY < middleSpaceY2){
-            fauxClick.pageY =anime.random( 0, cH );
+            fauxClick.pageY = anime.random( 0, cH );
             continue;
         }
         break;
     }
-    handleEvent(fauxClick)
+    handleEvent(fauxClick);
+    
+    setTimeout(function () { 
+       if (count < 5) {
+           fireworks(count + 1);
+       } else {
+           elem.classList.add("d-none");
+       }
+    }, 750);
 };
-
-
 });

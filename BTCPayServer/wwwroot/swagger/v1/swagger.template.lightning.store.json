@@ -14,7 +14,8 @@
                         "description": "The cryptoCode of the lightning-node to query",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -48,8 +49,65 @@
                 },
                 "security": [
                     {
-                        "API Key": [
-                            "btcpay.server.canuseinternallightningnode"
+                        "API_Key": [
+                            "btcpay.store.canuselightningnode"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/stores/{storeId}/lightning/{cryptoCode}/balance": {
+            "get": {
+                "tags": [
+                    "Lightning (Store)"
+                ],
+                "summary": "Get node balance",
+                "parameters": [
+                    {
+                        "name": "cryptoCode",
+                        "in": "path",
+                        "required": true,
+                        "description": "The cryptoCode of the lightning-node to query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "BTC"
+                    },
+                    {
+                        "name": "storeId",
+                        "in": "path",
+                        "required": true,
+                        "description": "The store id with the lightning-node configuration to query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "description": "View balance of the lightning node",
+                "operationId": "StoreLightningNodeApi_GetBalance",
+                "responses": {
+                    "200": {
+                        "description": "Lightning node balance for on-chain and off-chain funds",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LightningNodeBalanceData"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Unable to access the lightning node"
+                    },
+                    "404": {
+                        "description": "The lightning node configuration was not found"
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.store.canuselightningnode"
                         ],
                         "Basic": []
                     }
@@ -70,7 +128,8 @@
                         "description": "The cryptoCode of the lightning-node to query",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -127,8 +186,8 @@
                 },
                 "security": [
                     {
-                        "API Key": [
-                            "btcpay.server.canuseinternallightningnode"
+                        "API_Key": [
+                            "btcpay.store.cancreatelightninginvoice"
                         ],
                         "Basic": []
                     }
@@ -149,7 +208,8 @@
                         "description": "The cryptoCode of the lightning-node to query",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -183,8 +243,8 @@
                 },
                 "security": [
                     {
-                        "API Key": [
-                            "btcpay.server.canuseinternallightningnode"
+                        "API_Key": [
+                            "btcpay.store.cancreatelightninginvoice"
                         ],
                         "Basic": []
                     }
@@ -203,7 +263,8 @@
                         "description": "The cryptoCode of the lightning-node to query",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -260,8 +321,8 @@
                 },
                 "security": [
                     {
-                        "API Key": [
-                            "btcpay.server.canuseinternallightningnode"
+                        "API_Key": [
+                            "btcpay.store.cancreatelightninginvoice"
                         ],
                         "Basic": []
                     }
@@ -283,7 +344,8 @@
                         "schema": {
                             "type": "string",
                             "description": "A bitcoin address belonging to the lightning node"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -317,8 +379,75 @@
                 },
                 "security": [
                     {
-                        "API Key": [
-                            "btcpay.server.canuseinternallightningnode"
+                        "API_Key": [
+                            "btcpay.store.cancreatelightninginvoice"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            }
+        },
+
+        "/api/v1/stores/{storeId}/lightning/{cryptoCode}/payments/{paymentHash}": {
+            "get": {
+                "tags": [
+                    "Lightning (Store)"
+                ],
+                "summary": "Get payment",
+                "parameters": [
+                    {
+                        "name": "cryptoCode",
+                        "in": "path",
+                        "required": true,
+                        "description": "The cryptoCode of the lightning-node to query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "BTC"
+                    },
+                    {
+                        "name": "storeId",
+                        "in": "path",
+                        "required": true,
+                        "description": "The store id with the lightning-node configuration to query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "paymentHash",
+                        "in": "path",
+                        "required": true,
+                        "description": "The payment hash of the lightning payment.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "description": "View information about the requested lightning payment",
+                "operationId": "StoreLightningNodeApi_GetPayment",
+                "responses": {
+                    "200": {
+                        "description": "Lightning payment data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LightningPaymentData"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Unable to access the lightning node"
+                    },
+                    "404": {
+                        "description": "The lightning node configuration or the specified invoice was not found "
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.store.canuselightningnode"
                         ],
                         "Basic": []
                     }
@@ -340,7 +469,8 @@
                         "description": "The cryptoCode of the lightning-node to query",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -383,8 +513,8 @@
                 },
                 "security": [
                     {
-                        "API Key": [
-                            "btcpay.server.canuseinternallightningnode"
+                        "API_Key": [
+                            "btcpay.store.cancreatelightninginvoice"
                         ],
                         "Basic": []
                     }
@@ -405,7 +535,8 @@
                         "description": "The cryptoCode of the lightning-node to query",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -417,11 +548,28 @@
                         }
                     }
                 ],
-                "description": "Pay a lightning invoice.",
+                "description": "Pay a lightning invoice. In case the payment response times out, the status will be reported as pending and the final status can be resolved using the [Get payment](#operation/StoreLightningNodeApi_GetPayment) endpoint. The default wait time for payment responses is 30 seconds — it might take longer if multiple routes are tried or a hold invoice is getting paid.",
                 "operationId": "StoreLightningNodeApi_PayInvoice",
                 "responses": {
                     "200": {
-                        "description": "Successfully paid"
+                        "description": "Successfully paid",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LightningPaymentData"
+                                }
+                            }
+                        }
+                    },
+                    "202": {
+                        "description": "Payment initiated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LightningPaymentData"
+                                }
+                            }
+                        }
                     },
                     "422": {
                         "description": "Unable to validate the request",
@@ -462,8 +610,8 @@
                 },
                 "security": [
                     {
-                        "API Key": [
-                            "btcpay.server.canuseinternallightningnode"
+                        "API_Key": [
+                            "btcpay.store.cancreatelightninginvoice"
                         ],
                         "Basic": []
                     }
@@ -471,6 +619,103 @@
             }
         },
         "/api/v1/stores/{storeId}/lightning/{cryptoCode}/invoices": {
+            "get": {
+                "tags": [
+                    "Lightning (Store)"
+                ],
+                "summary": "Get invoices",
+                "parameters": [
+                    {
+                        "name": "cryptoCode",
+                        "in": "path",
+                        "required": true,
+                        "description": "The cryptoCode of the lightning-node to query",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "BTC"
+                    },
+                    {
+                        "name": "storeId",
+                        "in": "path",
+                        "required": true,
+                        "description": "The store id with the lightning-node configuration to query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "pendingOnly",
+                        "in": "query",
+                        "required": false,
+                        "description": "Limit to pending invoices only",
+                        "schema": {
+                            "type": "boolean",
+                            "nullable": true,
+                            "default": false
+                        }
+                    },
+                    {
+                        "name": "offsetIndex",
+                        "in": "query",
+                        "required": false,
+                        "description": "The index of an invoice that will be used as the start of the list",
+                        "schema": {
+                            "type": "number",
+                            "nullable": true,
+                            "default": 0
+                        }
+                    }
+                ],
+                "description": "View information about the lightning invoices",
+                "operationId": "StoreLightningNodeApi_GetInvoices",
+                "responses": {
+                    "200": {
+                        "description": "Lightning invoice data",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/LightningInvoiceData"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing authorization",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Unable to access the lightning node"
+                    },
+                    "default": {
+                        "description": "Unexpected error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.store.cancreatelightninginvoice"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            },
             "post": {
                 "tags": [
                     "Lightning (Store)"
@@ -484,7 +729,8 @@
                         "description": "The cryptoCode of the lightning-node to query",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "example": "BTC"
                     },
                     {
                         "name": "storeId",
@@ -509,6 +755,16 @@
                             }
                         }
                     },
+                    "400": {
+                        "description": "Wellknown error codes are: `invoice-error`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProblemDetails"
+                                }
+                            }
+                        }
+                    },
                     "503": {
                         "description": "Unable to access the lightning node"
                     },
@@ -521,14 +777,14 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/PayLightningInvoiceRequest"
+                                "$ref": "#/components/schemas/CreateLightningInvoiceRequest"
                             }
                         }
                     }
                 },
                 "security": [
                     {
-                        "API Key": [
+                        "API_Key": [
                             "btcpay.server.cancreatelightninginvoiceinternalnode"
                         ],
                         "Basic": []
@@ -539,7 +795,8 @@
     },
     "tags": [
         {
-            "name": "Lightning (Store)"
+            "name": "Lightning (Store)",
+            "description": "Lightning (Store) operations"
         }
     ]
 }

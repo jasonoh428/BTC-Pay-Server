@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Controllers;
 using BTCPayServer.Events;
+using BTCPayServer.Logging;
 using BTCPayServer.Services.Apps;
 
 namespace BTCPayServer.HostedServices
@@ -20,8 +21,7 @@ namespace BTCPayServer.HostedServices
             Subscribe<UpdateAppInventory>();
         }
 
-        public AppInventoryUpdaterHostedService(EventAggregator eventAggregator, AppService appService) : base(
-            eventAggregator)
+        public AppInventoryUpdaterHostedService(EventAggregator eventAggregator, AppService appService, Logs logs) : base(eventAggregator, logs)
         {
             _eventAggregator = eventAggregator;
             _appService = appService;
@@ -37,7 +37,7 @@ namespace BTCPayServer.HostedServices
                         switch (Enum.Parse<AppType>(data.AppType))
                         {
                             case AppType.PointOfSale:
-                                var possettings = data.GetSettings<AppsController.PointOfSaleSettings>();
+                                var possettings = data.GetSettings<PointOfSaleSettings>();
                                 return (Data: data, Settings: (object)possettings,
                                     Items: _appService.Parse(possettings.Template, possettings.Currency));
                             case AppType.Crowdfund:
@@ -69,7 +69,7 @@ namespace BTCPayServer.HostedServices
                     {
                         case AppType.PointOfSale:
 
-                            ((AppsController.PointOfSaleSettings)valueTuple.Settings).Template =
+                            ((PointOfSaleSettings)valueTuple.Settings).Template =
                                 _appService.SerializeTemplate(valueTuple.Items);
                             break;
                         case AppType.Crowdfund:
@@ -136,6 +136,11 @@ namespace BTCPayServer.HostedServices
             public string[] AppId { get; set; }
             public Dictionary<string, int> Items { get; set; }
             public bool Deduct { get; set; }
+
+            public override string ToString()
+            {
+                return string.Empty;
+            }
         }
     }
 }

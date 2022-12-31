@@ -10,12 +10,15 @@ namespace BTCPayServer.HostedServices
 {
     public class CheckConfigurationHostedService : IHostedService
     {
+        public Logs Logs { get; }
+
         private readonly BTCPayServerOptions _options;
         Task _testingConnection;
         readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
-        public CheckConfigurationHostedService(BTCPayServerOptions options)
+        public CheckConfigurationHostedService(BTCPayServerOptions options, Logs logs)
         {
+            Logs = logs;
             _options = options;
         }
 
@@ -37,12 +40,10 @@ retry:
                 Logs.Configuration.LogInformation($"SSH settings detected, testing connection to {_options.SSHSettings.Username}@{_options.SSHSettings.Server} on port {_options.SSHSettings.Port} ...");
                 try
                 {
-                    using (var connection = await _options.SSHSettings.ConnectAsync(_cancellationTokenSource.Token))
-                    {
-                        await connection.DisconnectAsync(_cancellationTokenSource.Token);
-                        Logs.Configuration.LogInformation($"SSH connection succeeded");
-                        canUseSSH = true;
-                    }
+                    using var connection = await _options.SSHSettings.ConnectAsync(_cancellationTokenSource.Token);
+                    await connection.DisconnectAsync(_cancellationTokenSource.Token);
+                    Logs.Configuration.LogInformation($"SSH connection succeeded");
+                    canUseSSH = true;
                 }
                 catch (Renci.SshNet.Common.SshAuthenticationException ex)
                 {

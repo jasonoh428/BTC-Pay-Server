@@ -129,7 +129,7 @@
           slots = _ref.slots;
 
       var componentData = {
-        staticClass: 'close',
+        staticClass: 'btn-close',
         class: defineProperty({}, 'text-' + props.textVariant, props.textVariant),
         attrs: {
           type: 'button',
@@ -147,7 +147,7 @@
         }
         // Careful not to override the slot with innerHTML
       };if (!slots().default) {
-        componentData.domProps = { innerHTML: '&times;' };
+        componentData.domProps = { innerHTML: '<svg role="img" class="icon icon-close" viewBox="0 0 16 16"><path d="M9.38526 8.08753L15.5498 1.85558C15.9653 1.43545 15.9653 0.805252 15.5498 0.385121C15.1342 -0.0350102 14.5108 -0.0350102 14.0952 0.385121L7.93072 6.61707L1.76623 0.315098C1.35065 -0.105033 0.727273 -0.105033 0.311688 0.315098C-0.103896 0.73523 -0.103896 1.36543 0.311688 1.78556L6.47618 8.0175L0.311688 14.2495C-0.103896 14.6696 -0.103896 15.2998 0.311688 15.7199C0.519481 15.93 0.796499 16 1.07355 16C1.35061 16 1.62769 15.93 1.83548 15.7199L7.99997 9.48797L14.1645 15.7199C14.3722 15.93 14.6493 16 14.9264 16C15.2034 16 15.4805 15.93 15.6883 15.7199C16.1039 15.2998 16.1039 14.6696 15.6883 14.2495L9.38526 8.08753Z" fill="currentColor"/></svg>' };
       }
       return h('button', mergeData(data, componentData), slots().default);
     }
@@ -804,8 +804,8 @@
 
       var componentData = {
         staticClass: 'badge',
-        class: [!props.variant ? 'badge-secondary' : 'badge-' + props.variant, {
-          'badge-pill': Boolean(props.pill),
+        class: [!props.variant ? 'bg-secondary' : 'bg-' + props.variant, {
+          'rounded-pill': Boolean(props.pill),
           active: props.active,
           disabled: props.disabled
         }],
@@ -2653,9 +2653,9 @@
         src = makeBlankImgSrc(width, height, props.blankColor || 'transparent');
       }
       if (props.left) {
-        align = 'float-left';
+        align = 'float-start';
       } else if (props.right) {
-        align = 'float-right';
+        align = 'float-end';
       } else if (props.center) {
         align = 'mx-auto';
         block = true;
@@ -3053,7 +3053,7 @@
           children = _ref.children;
 
       return h(props.tag, mergeData(data, {
-        staticClass: 'form-row'
+        staticClass: 'row'
       }), children);
     }
   };
@@ -9138,13 +9138,13 @@
 
       if (!props.noBody) {
         if ($slots.aside && !props.rightAlign) {
-          childNodes.push(h(MediaAside, { staticClass: 'mr-3', props: { verticalAlign: props.verticalAlign } }, $slots.aside));
+          childNodes.push(h(MediaAside, { staticClass: 'me-3', props: { verticalAlign: props.verticalAlign } }, $slots.aside));
         }
 
         childNodes.push(h(MediaBody, $slots.default));
 
         if ($slots.aside && props.rightAlign) {
-          childNodes.push(h(MediaAside, { staticClass: 'ml-3', props: { verticalAlign: props.verticalAlign } }, $slots.aside));
+          childNodes.push(h(MediaAside, { staticClass: 'ms-3', props: { verticalAlign: props.verticalAlign } }, $slots.aside));
         }
       }
 
@@ -16699,4 +16699,3 @@
   return VuePlugin$F;
 
 })));
-//# sourceMappingURL=bootstrap-vue.js.map

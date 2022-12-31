@@ -21,8 +21,7 @@ namespace BTCPayServer.Security.Bitpay
         readonly ApplicationDbContextFactory _Factory;
         public TokenRepository(ApplicationDbContextFactory dbFactory)
         {
-            if (dbFactory == null)
-                throw new ArgumentNullException(nameof(dbFactory));
+            ArgumentNullException.ThrowIfNull(dbFactory);
             _Factory = dbFactory;
         }
 
@@ -30,21 +29,17 @@ namespace BTCPayServer.Security.Bitpay
         {
             if (sin == null)
                 return Array.Empty<BitTokenEntity>();
-            using (var ctx = _Factory.CreateContext())
-            {
-                return (await ctx.PairedSINData.Where(p => p.SIN == sin)
-                    .ToArrayAsync())
-                    .Select(p => CreateTokenEntity(p))
-                    .ToArray();
-            }
+            using var ctx = _Factory.CreateContext();
+            return (await ctx.PairedSINData.Where(p => p.SIN == sin)
+                .ToArrayAsync())
+                .Select(p => CreateTokenEntity(p))
+                .ToArray();
         }
 
         public async Task<String> GetStoreIdFromAPIKey(string apiKey)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                return await ctx.ApiKeys.Where(o => o.Id == apiKey).Select(o => o.StoreId).FirstOrDefaultAsync();
-            }
+            using var ctx = _Factory.CreateContext();
+            return await ctx.ApiKeys.Where(o => o.Id == apiKey).Select(o => o.StoreId).FirstOrDefaultAsync();
         }
 
         public async Task GenerateLegacyAPIKey(string storeId)
@@ -52,23 +47,20 @@ namespace BTCPayServer.Security.Bitpay
             // It is legacy support and Bitpay generate string of unknown format, trying to replicate them
             // as good as possible. The string below got generated for me.
             var chars = "ERo0vkBMOYhyU0ZHvirCplbLDIGWPdi1ok77VnW7QdE";
-            var rand = new Random(Math.Abs(RandomUtils.GetInt32()));
             var generated = new char[chars.Length];
             for (int i = 0; i < generated.Length; i++)
             {
-                generated[i] = chars[rand.Next(0, generated.Length)];
+                generated[i] = chars[(int)(RandomUtils.GetUInt32() % generated.Length)];
             }
 
-            using (var ctx = _Factory.CreateContext())
+            using var ctx = _Factory.CreateContext();
+            var existing = await ctx.ApiKeys.Where(o => o.StoreId == storeId && o.Type == APIKeyType.Legacy).ToListAsync();
+            if (existing.Any())
             {
-                var existing = await ctx.ApiKeys.Where(o => o.StoreId == storeId && o.Type == APIKeyType.Legacy).ToListAsync();
-                if (existing.Any())
-                {
-                    ctx.ApiKeys.RemoveRange(existing);
-                }
-                ctx.ApiKeys.Add(new APIKeyData() { Id = new string(generated), StoreId = storeId });
-                await ctx.SaveChangesAsync().ConfigureAwait(false);
+                ctx.ApiKeys.RemoveRange(existing);
             }
+            ctx.ApiKeys.Add(new APIKeyData() { Id = new string(generated), StoreId = storeId });
+            await ctx.SaveChangesAsync().ConfigureAwait(false);
         }
 
         public async Task RevokeLegacyAPIKeys(string storeId)
@@ -79,19 +71,15 @@ namespace BTCPayServer.Security.Bitpay
                 return;
             }
 
-            using (var ctx = _Factory.CreateContext())
-            {
-                ctx.ApiKeys.RemoveRange(keys.Select(s => new APIKeyData() { Id = s }));
-                await ctx.SaveChangesAsync();
-            }
+            using var ctx = _Factory.CreateContext();
+            ctx.ApiKeys.RemoveRange(keys.Select(s => new APIKeyData() { Id = s }));
+            await ctx.SaveChangesAsync();
         }
 
         public async Task<string[]> GetLegacyAPIKeys(string storeId)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                return await ctx.ApiKeys.Where(o => o.StoreId == storeId && o.Type == APIKeyType.Legacy).Select(c => c.Id).ToArrayAsync();
-            }
+            using var ctx = _Factory.CreateContext();
+            return await ctx.ApiKeys.Where(o => o.StoreId == storeId && o.Type == APIKeyType.Legacy).Select(c => c.Id).ToArrayAsync();
         }
 
         private BitTokenEntity CreateTokenEntity(PairedSINData data)
@@ -133,41 +121,35 @@ namespace BTCPayServer.Security.Bitpay
 
         public async Task<PairingCodeEntity> UpdatePairingCode(PairingCodeEntity pairingCodeEntity)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                var pairingCode = await ctx.PairingCodes.FindAsync(pairingCodeEntity.Id);
-                pairingCode.Label = pairingCodeEntity.Label;
-                await ctx.SaveChangesAsync();
-                return CreatePairingCodeEntity(pairingCode);
-            }
+            using var ctx = _Factory.CreateContext();
+            var pairingCode = await ctx.PairingCodes.FindAsync(pairingCodeEntity.Id);
+            pairingCode.Label = pairingCodeEntity.Label;
+            await ctx.SaveChangesAsync();
+            return CreatePairingCodeEntity(pairingCode);
         }
 
         public async Task<PairingResult> PairWithStoreAsync(string pairingCodeId, string storeId)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                var pairingCode = await ctx.PairingCodes.FindAsync(pairingCodeId);
-                if (pairingCode == null || pairingCode.Expiration < DateTimeOffset.UtcNow)
-                    return PairingResult.Expired;
-                pairingCode.StoreDataId = storeId;
-                var result = await ActivateIfComplete(ctx, pairingCode);
-                await ctx.SaveChangesAsync();
-                return result;
-            }
+            using var ctx = _Factory.CreateContext();
+            var pairingCode = await ctx.PairingCodes.FindAsync(pairingCodeId);
+            if (pairingCode == null || pairingCode.Expiration < DateTimeOffset.UtcNow)
+                return PairingResult.Expired;
+            pairingCode.StoreDataId = storeId;
+            var result = await ActivateIfComplete(ctx, pairingCode);
+            await ctx.SaveChangesAsync();
+            return result;
         }
 
         public async Task<PairingResult> PairWithSINAsync(string pairingCodeId, string sin)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                var pairingCode = await ctx.PairingCodes.FindAsync(pairingCodeId);
-                if (pairingCode == null || pairingCode.Expiration < DateTimeOffset.UtcNow)
-                    return PairingResult.Expired;
-                pairingCode.SIN = sin;
-                var result = await ActivateIfComplete(ctx, pairingCode);
-                await ctx.SaveChangesAsync();
-                return result;
-            }
+            using var ctx = _Factory.CreateContext();
+            var pairingCode = await ctx.PairingCodes.FindAsync(pairingCodeId);
+            if (pairingCode == null || pairingCode.Expiration < DateTimeOffset.UtcNow)
+                return PairingResult.Expired;
+            pairingCode.SIN = sin;
+            var result = await ActivateIfComplete(ctx, pairingCode);
+            await ctx.SaveChangesAsync();
+            return result;
         }
 
 
@@ -197,20 +179,16 @@ namespace BTCPayServer.Security.Bitpay
 
         public async Task<BitTokenEntity[]> GetTokensByStoreIdAsync(string storeId)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                return (await ctx.PairedSINData.Where(p => p.StoreDataId == storeId).ToListAsync())
-                        .Select(c => CreateTokenEntity(c))
-                        .ToArray();
-            }
+            using var ctx = _Factory.CreateContext();
+            return (await ctx.PairedSINData.Where(p => p.StoreDataId == storeId).ToListAsync())
+                    .Select(c => CreateTokenEntity(c))
+                    .ToArray();
         }
 
         public async Task<PairingCodeEntity> GetPairingAsync(string pairingCode)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                return CreatePairingCodeEntity(await ctx.PairingCodes.FindAsync(pairingCode));
-            }
+            using var ctx = _Factory.CreateContext();
+            return CreatePairingCodeEntity(await ctx.PairingCodes.FindAsync(pairingCode));
         }
 
         private PairingCodeEntity CreatePairingCodeEntity(PairingCodeData data)
@@ -231,26 +209,22 @@ namespace BTCPayServer.Security.Bitpay
 
         public async Task<bool> DeleteToken(string tokenId)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                var token = await ctx.PairedSINData.FindAsync(tokenId);
-                if (token == null)
-                    return false;
-                ctx.PairedSINData.Remove(token);
-                await ctx.SaveChangesAsync();
-                return true;
-            }
+            using var ctx = _Factory.CreateContext();
+            var token = await ctx.PairedSINData.FindAsync(tokenId);
+            if (token == null)
+                return false;
+            ctx.PairedSINData.Remove(token);
+            await ctx.SaveChangesAsync();
+            return true;
         }
 
         public async Task<BitTokenEntity> GetToken(string tokenId)
         {
-            using (var ctx = _Factory.CreateContext())
-            {
-                var token = await ctx.PairedSINData.FindAsync(tokenId);
-                if (token == null)
-                    return null;
-                return CreateTokenEntity(token);
-            }
+            using var ctx = _Factory.CreateContext();
+            var token = await ctx.PairedSINData.FindAsync(tokenId);
+            if (token == null)
+                return null;
+            return CreateTokenEntity(token);
         }
 
     }

@@ -2,45 +2,57 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using BTCPayServer.Common;
 using BTCPayServer.Configuration;
 using BTCPayServer.HostedServices;
 using BTCPayServer.Logging;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NBXplorer;
 
 namespace BTCPayServer
 {
-    public class ExplorerClientProvider
+    public class ExplorerClientProvider : IExplorerClientProvider
     {
         readonly BTCPayNetworkProvider _NetworkProviders;
-        readonly BTCPayServerOptions _Options;
 
         public BTCPayNetworkProvider NetworkProviders => _NetworkProviders;
 
+        public Logs Logs { get; }
+
         readonly NBXplorerDashboard _Dashboard;
-        public ExplorerClientProvider(IHttpClientFactory httpClientFactory, BTCPayNetworkProvider networkProviders, BTCPayServerOptions options, NBXplorerDashboard dashboard)
+
+        public ExplorerClientProvider(
+            IHttpClientFactory httpClientFactory,
+            BTCPayNetworkProvider networkProviders,
+            IOptions<NBXplorerOptions> nbXplorerOptions,
+            NBXplorerDashboard dashboard,
+            Logs logs)
         {
+            Logs = logs;
             _Dashboard = dashboard;
             _NetworkProviders = networkProviders;
-            _Options = options;
 
-            foreach (var setting in options.NBXplorerConnectionSettings)
+            foreach (var setting in nbXplorerOptions.Value.NBXplorerConnectionSettings)
             {
                 var cookieFile = setting.CookieFile;
                 if (cookieFile.Trim() == "0" || string.IsNullOrEmpty(cookieFile.Trim()))
                     cookieFile = null;
-                Logs.Configuration.LogInformation($"{setting.CryptoCode}: Explorer url is {(setting.ExplorerUri.AbsoluteUri ?? "not set")}");
+                Logs.Configuration.LogInformation($"{setting.CryptoCode}: Explorer url is {(setting.ExplorerUri.AbsoluteUri)}");
                 Logs.Configuration.LogInformation($"{setting.CryptoCode}: Cookie file is {(setting.CookieFile ?? "not set")}");
                 if (setting.ExplorerUri != null)
                 {
-                    _Clients.TryAdd(setting.CryptoCode.ToUpperInvariant(), CreateExplorerClient(httpClientFactory.CreateClient(nameof(ExplorerClientProvider)), _NetworkProviders.GetNetwork<BTCPayNetwork>(setting.CryptoCode), setting.ExplorerUri, setting.CookieFile));
+                    _Clients.TryAdd(setting.CryptoCode.ToUpperInvariant(),
+                        CreateExplorerClient(httpClientFactory.CreateClient(nameof(ExplorerClientProvider)),
+                            _NetworkProviders.GetNetwork<BTCPayNetwork>(setting.CryptoCode), setting.ExplorerUri,
+                            setting.CookieFile));
                 }
             }
         }
 
-        private static ExplorerClient CreateExplorerClient(HttpClient httpClient, BTCPayNetwork n, Uri uri, string cookieFile)
+        private ExplorerClient CreateExplorerClient(HttpClient httpClient, BTCPayNetwork n, Uri uri,
+            string cookieFile)
         {
-
             var explorer = n.NBXplorerNetwork.CreateExplorerClient(uri);
             explorer.SetClient(httpClient);
             if (cookieFile == null)
@@ -48,10 +60,13 @@ namespace BTCPayServer
                 Logs.Configuration.LogWarning($"{explorer.CryptoCode}: Not using cookie authentication");
                 explorer.SetNoAuth();
             }
+
             if (!explorer.SetCookieAuth(cookieFile))
             {
-                Logs.Configuration.LogWarning($"{explorer.CryptoCode}: Using cookie auth against NBXplorer, but {cookieFile} is not found");
+                Logs.Configuration.LogWarning(
+                    $"{explorer.CryptoCode}: Using cookie auth against NBXplorer, but {cookieFile} is not found");
             }
+
             return explorer;
         }
 
@@ -68,8 +83,7 @@ namespace BTCPayServer
 
         public ExplorerClient GetExplorerClient(BTCPayNetworkBase network)
         {
-            if (network == null)
-                throw new ArgumentNullException(nameof(network));
+            ArgumentNullException.ThrowIfNull(network);
             return GetExplorerClient(network.CryptoCode);
         }
 

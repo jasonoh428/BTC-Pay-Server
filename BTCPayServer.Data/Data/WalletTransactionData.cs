@@ -1,9 +1,9 @@
-using System.Collections.Generic;
+using System;
 using Microsoft.EntityFrameworkCore;
-using Newtonsoft.Json;
 
 namespace BTCPayServer.Data
 {
+    [Obsolete]
     public class WalletTransactionData
     {
         public string WalletDataId { get; set; }
@@ -11,6 +11,8 @@ namespace BTCPayServer.Data
         public string TransactionId { get; set; }
         public string Labels { get; set; }
         public byte[] Blob { get; set; }
+
+
         internal static void OnModelCreating(ModelBuilder builder)
         {
             builder.Entity<WalletTransactionData>()
@@ -25,12 +27,5 @@ namespace BTCPayServer.Data
                 .HasOne(o => o.WalletData)
                 .WithMany(w => w.WalletTransactions).OnDelete(DeleteBehavior.Cascade);
         }
-    }
-
-    public class WalletTransactionInfo
-    {
-        public string Comment { get; set; } = string.Empty;
-        [JsonIgnore]
-        public HashSet<string> Labels { get; set; } = new HashSet<string>();
     }
 }

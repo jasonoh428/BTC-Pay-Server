@@ -1,4 +1,4 @@
-﻿/// <reference path="vaultbridge.js" />
+/// <reference path="vaultbridge.js" />
 /// file: vaultbridge.js
 
 var vaultui = (function () {
@@ -25,13 +25,14 @@ var vaultui = (function () {
     }
 
     var VaultFeedbacks = {
-        vaultLoading: new VaultFeedback("?", "Checking BTCPayServer Vault is running...", "vault-feedback1", "vault-loading"),
+        vaultLoading: new VaultFeedback("?", "Checking BTCPay Server Vault is running...", "vault-feedback1", "vault-loading"),
         vaultDenied: new VaultFeedback("failed", "The user declined access to the vault.", "vault-feedback1", "vault-denied"),
         vaultGranted: new VaultFeedback("ok", "Access to vault granted by owner.", "vault-feedback1", "vault-granted"),
-        noVault: new VaultFeedback("failed", "BTCPayServer Vault does not seem to be running, you can download it on <a target=\"_blank\" href=\"https://github.com/btcpayserver/BTCPayServer.Vault/releases/latest\">Github</a>.", "vault-feedback1", "no-vault"),
+        noVault: new VaultFeedback("failed", "BTCPay Server Vault does not seem to be running, you can download it on <a target=\"_blank\" href=\"https://github.com/btcpayserver/BTCPayServer.Vault/releases/latest\">Github</a>.", "vault-feedback1", "no-vault"),
         noWebsockets: new VaultFeedback("failed", "Web sockets are not supported by the browser.", "vault-feedback1", "no-websocket"),
         errorWebsockets: new VaultFeedback("failed", "Error of the websocket while connecting to the backend.", "vault-feedback1", "error-websocket"),
         bridgeConnected: new VaultFeedback("ok", "BTCPayServer successfully connected to the vault.", "vault-feedback1", "bridge-connected"),
+        vaultNeedUpdate: new VaultFeedback("failed", "Your BTCPay Server Vault version is outdated. Please <a target=\"_blank\" href=\"https://github.com/btcpayserver/BTCPayServer.Vault/releases/latest\">download</a> the latest version.", "vault-feedback2", "vault-outdated"),
         noDevice: new VaultFeedback("failed", "No device connected.", "vault-feedback2", "no-device"),
         needInitialized: new VaultFeedback("failed", "The device has not been initialized.", "vault-feedback2", "need-initialized"),
         fetchingDevice: new VaultFeedback("?", "Fetching device...", "vault-feedback2", "fetching-device"),
@@ -49,7 +50,7 @@ var vaultui = (function () {
         needPassphrase: new VaultFeedback("?", "Enter the passphrase.", "vault-feedback3", "need-passphrase"),
         needPassphraseOnDevice: new VaultFeedback("?", "Please, enter the passphrase on the device.", "vault-feedback3", "need-passphrase-on-device"),
         signingTransaction: new VaultFeedback("?", "Please review and confirm the transaction on your device...", "vault-feedback3", "ask-signing"),
-        reviewAddress: new VaultFeedback("?", "Please review the address on your device...", "vault-feedback3", "ask-signing"),
+        reviewAddress: new VaultFeedback("?", "Sending... Please review the address on your device...", "vault-feedback3", "ask-signing"),
         signingRejected: new VaultFeedback("failed", "The user refused to sign the transaction", "vault-feedback3", "user-reject"),
     };
 
@@ -73,13 +74,22 @@ var vaultui = (function () {
         this.psbt = null;
 
         this.xpub = null;
+
+        this.retryShowing = false;
+
+        function showRetry() {
+            var button = $("#vault-retry");
+            self.retryShowing = true;
+            button.show();
+        }
+
         /**
         * @param {VaultFeedback} feedback
         */
         function show(feedback) {
             var icon = $(".vault-feedback." + feedback.category + " " + ".vault-feedback-icon");
             icon.removeClass();
-            icon.addClass("vault-feedback-icon");
+            icon.addClass("vault-feedback-icon mt-1 me-2");
             if (feedback.type == "?") {
                 icon.addClass("fa fa-question-circle feedback-icon-loading");
             }
@@ -88,6 +98,7 @@ var vaultui = (function () {
             }
             else if (feedback.type == "failed") {
                 icon.addClass("fa fa-times-circle feedback-icon-failed");
+                showRetry();
             }
             var content = $(".vault-feedback." + feedback.category + " " + ".vault-feedback-content");
             content.html(feedback.txt);
@@ -149,7 +160,28 @@ var vaultui = (function () {
             return false;
         }
 
+        this.waitRetryPushed = function () {
+            var button = $("#vault-retry");
+            return new Promise(function (resolve) {
+                button.click(function () {
+                    // Cleanup old feedback
+                    var icon = $(".vault-feedback-icon");
+                    icon.removeClass();
+                    icon.addClass("vault-feedback-icon");
+                    var content = $(".vault-feedback-content");
+                    content.html('');
+                    ///////////////////
+                    button.hide();
+                    self.retryShowing = false;
+                    resolve(true);
+                });
+            });
+        };
+
         this.ensureConnectedToBackend = async function () {
+            if (self.retryShowing) {
+                await self.waitRetryPushed();
+            }
             if (!self.bridge) {
                 $("#vault-dropdown").css("display", "none");
                 show(VaultFeedbacks.vaultLoading);
@@ -213,18 +245,22 @@ var vaultui = (function () {
                     return await self.askForXPubs();
                 return false;
             }
-            var selectedXPubs = await self.getXpubSettings();
-            self.bridge.socket.send(JSON.stringify(selectedXPubs));
-            show(VaultFeedbacks.fetchingXpubs);
-            json = await self.bridge.waitBackendMessage();
-            if (json.hasOwnProperty("error")) {
-                if (await needRetry(json))
-                    return await self.askForXPubs();
-                return false;
+            try {
+                var selectedXPubs = await self.getXpubSettings();
+                self.bridge.socket.send(JSON.stringify(selectedXPubs));
+                show(VaultFeedbacks.fetchingXpubs);
+                json = await self.bridge.waitBackendMessage();
+                if (json.hasOwnProperty("error")) {
+                    if (await needRetry(json))
+                        return await self.askForXPubs();
+                    return false;
+                }
+                show(VaultFeedbacks.fetchedXpubs);
+                self.xpub = json;
+                return true;
+            } catch (err) {
+                showError({ error: true, message: err });
             }
-            show(VaultFeedbacks.fetchedXpubs);
-            self.xpub = json;
-            return true;
         };
 
         /**
@@ -241,10 +277,13 @@ var vaultui = (function () {
                     $("#vault-xpub").css("display", "none");
                     $("#vault-confirm").css("display", "none");
                     $(this).unbind();
-                    resolve({
-                        addressType: $("select[name=\"addressType\"]").val(),
-                        accountNumber: parseInt($("select[name=\"accountNumber\"]").val())
-                    });
+                    const addressType = $("select[name=\"addressType\"]").val();
+                    const accountNumber = parseInt($("input[name=\"accountNumber\"]").val());
+                    if (addressType && !isNaN(accountNumber)) {
+                        resolve({ addressType, accountNumber });
+                    } else {
+                        reject("Provide an address type and account number")
+                    }
                 });
             });
         };

@@ -92,8 +92,8 @@ $(document).ready(function(){
             
             // Add loading animation to the pay button
             button.prepend([
-                '<div class="spinner-grow spinner-grow-sm" role="status">',
-                '    <span class="sr-only">Loading...</span>',
+                '<div class="spinner-grow spinner-grow-sm align-baseline" role="status">',
+                '    <span class="visually-hidden">Loading...</span>',
                 '</div>'
             ].join(''));
         }
@@ -137,8 +137,17 @@ $(document).ready(function(){
         cart.updateSummaryProducts();
         cart.updateSummaryTotal();
 
+        var $tipInput = $('.js-cart-tip');
+        $tipInput[0].addEventListener('input', function(e) {
+            var value = parseFloat(e.target.value)
+            if (Number.isNaN(value) || value < 0) {
+                e.target.value = '';
+                return;
+            }
+        });
+
         // Change total when tip is changed
-        $('.js-cart-tip').inputAmount(cart, 'tip');
+        $tipInput.inputAmount(cart, 'tip');
         // Remove tip
         $('.js-cart-tip-remove').removeAmount(cart, 'tip');
 

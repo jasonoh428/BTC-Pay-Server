@@ -11,10 +11,9 @@ namespace BTCPayServer
             Add(new BTCPayNetwork()
             {
                 CryptoCode = nbxplorerNetwork.CryptoCode,
-                DisplayName = "Bitcore",
-                BlockExplorerLink = NetworkType == NetworkType.Mainnet ? "https://insight.bitcore.cc/tx/{0}" : "https://insight.bitcore.cc/tx/{0}",
+                DisplayName = "BitCore",
+                BlockExplorerLink = NetworkType == ChainName.Mainnet ? "https://explorer.bitcore.cc/tx/{0}" : "https://explorer.bitcore.cc/tx/{0}",
                 NBXplorerNetwork = nbxplorerNetwork,
-                UriScheme = "bitcore",
                 DefaultRateRules = new[]
                 {
                                 "BTX_X = BTX_BTC * BTC_X",
@@ -23,7 +22,7 @@ namespace BTCPayServer
                 CryptoImagePath = "imlegacy/bitcore.svg",
                 LightningImagePath = "imlegacy/bitcore-lightning.svg",
                 DefaultSettings = BTCPayDefaultSettings.GetDefaultSettings(NetworkType),
-                CoinType = NetworkType == NetworkType.Mainnet ? new KeyPath("160'") : new KeyPath("1'")
+                CoinType = NetworkType == ChainName.Mainnet ? new KeyPath("160'") : new KeyPath("1'")
             });
         }
     }

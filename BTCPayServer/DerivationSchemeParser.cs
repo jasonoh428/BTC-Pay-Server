@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NBitcoin;
+using NBitcoin.Scripting;
 using NBXplorer.DerivationStrategy;
 
 namespace BTCPayServer
@@ -12,21 +13,89 @@ namespace BTCPayServer
 
         public Network Network => BtcPayNetwork.NBitcoinNetwork;
 
-        public Script HintScriptPubKey { get; set; }
-
         public DerivationSchemeParser(BTCPayNetwork expectedNetwork)
         {
-            if (expectedNetwork == null)
-                throw new ArgumentNullException(nameof(expectedNetwork));
+            ArgumentNullException.ThrowIfNull(expectedNetwork);
             BtcPayNetwork = expectedNetwork;
         }
 
+        public (DerivationStrategyBase, RootedKeyPath[]) ParseOutputDescriptor(string str)
+        {
+            (DerivationStrategyBase, RootedKeyPath[]) ExtractFromPkProvider(PubKeyProvider pubKeyProvider,
+                string suffix = "")
+            {
+                switch (pubKeyProvider)
+                {
+                    case PubKeyProvider.Const _:
+                        throw new FormatException("Only HD output descriptors are supported.");
+                    case PubKeyProvider.HD hd:
+                        if (hd.Path != null && hd.Path.ToString() != "0")
+                        {
+                            throw new FormatException("Custom change paths are not supported.");
+                        }
+                        return (Parse($"{hd.Extkey}{suffix}"), null);
+                    case PubKeyProvider.Origin origin:
+                        var innerResult = ExtractFromPkProvider(origin.Inner, suffix);
+                        return (innerResult.Item1, new[] { origin.KeyOriginInfo });
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+            }
+            
+            (DerivationStrategyBase, RootedKeyPath[]) ExtractFromMulti(OutputDescriptor.Multi multi)
+            {
+                var xpubs = multi.PkProviders.Select(provider => ExtractFromPkProvider(provider));
+                return (
+                    Parse(
+                        $"{multi.Threshold}-of-{(string.Join('-', xpubs.Select(tuple => tuple.Item1.ToString())))}{(multi.IsSorted ? "" : "-[keeporder]")}"),
+                    xpubs.SelectMany(tuple => tuple.Item2).ToArray());
+            }
+            
+            ArgumentNullException.ThrowIfNull(str);
+            str = str.Trim();
+            var outputDescriptor = OutputDescriptor.Parse(str, Network);
+            switch (outputDescriptor)
+            {
+                case OutputDescriptor.PK _:
+                case OutputDescriptor.Raw _:
+                case OutputDescriptor.Addr _:
+                    throw new FormatException("Only HD output descriptors are supported.");
+                case OutputDescriptor.Combo _:
+                    throw new FormatException("Only output descriptors of one format are supported.");
+                case OutputDescriptor.Multi multi:
+                    return ExtractFromMulti(multi);
+                case OutputDescriptor.PKH pkh:
+                    return ExtractFromPkProvider(pkh.PkProvider, "-[legacy]");
+                case OutputDescriptor.SH sh:
+                    var suffix = "-[p2sh]";
+                    if (sh.Inner is OutputDescriptor.Multi)
+                    {
+                        //non segwit
+                        suffix = "-[legacy]";
+                    }
+
+                    if (sh.Inner is OutputDescriptor.Multi || sh.Inner is OutputDescriptor.WPKH ||
+                        sh.Inner is OutputDescriptor.WSH)
+                    {
+                        var ds = ParseOutputDescriptor(sh.Inner.ToString());
+                        return (Parse(ds.Item1 + suffix), ds.Item2);
+                    };
+                    throw new FormatException("sh descriptors are only supported with multsig(legacy or p2wsh) and segwit(p2wpkh)");
+                case OutputDescriptor.WPKH wpkh:
+                    return ExtractFromPkProvider(wpkh.PkProvider, "");
+                case OutputDescriptor.WSH { Inner: OutputDescriptor.Multi multi }:
+                    return ExtractFromMulti(multi);
+                case OutputDescriptor.WSH:
+                    throw new FormatException("wsh descriptors are only supported with multisig");
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(outputDescriptor));
+            }
+        }
 
         public DerivationStrategyBase ParseElectrum(string str)
         {
 
-            if (str == null)
-                throw new ArgumentNullException(nameof(str));
+            ArgumentNullException.ThrowIfNull(str);
             str = str.Trim();
             var data = Network.GetBase58CheckEncoder().DecodeData(str);
             if (data.Length < 4)
@@ -53,24 +122,10 @@ namespace BTCPayServer
 
         public DerivationStrategyBase Parse(string str)
         {
-            if (str == null)
-                throw new ArgumentNullException(nameof(str));
+            ArgumentNullException.ThrowIfNull(str);
             str = str.Trim();
 
             HashSet<string> hintedLabels = new HashSet<string>();
-
-            var hintDestination = HintScriptPubKey?.GetDestination();
-            if (hintDestination != null)
-            {
-                if (hintDestination is KeyId)
-                {
-                    hintedLabels.Add("legacy");
-                }
-                if (hintDestination is ScriptId)
-                {
-                    hintedLabels.Add("p2sh");
-                }
-            }
 
             if (!Network.Consensus.SupportSegwit)
             {
@@ -80,8 +135,7 @@ namespace BTCPayServer
 
             try
             {
-                var result = BtcPayNetwork.NBXplorerNetwork.DerivationStrategyFactory.Parse(str);
-                return FindMatch(hintedLabels, result);
+                return BtcPayNetwork.NBXplorerNetwork.DerivationStrategyFactory.Parse(str);
             }
             catch
             {
@@ -133,22 +187,13 @@ namespace BTCPayServer
                 catch { continue; }
             }
 
-            if (hintDestination != null)
-            {
-                if (hintDestination is WitKeyId)
-                {
-                    hintedLabels.Remove("legacy");
-                    hintedLabels.Remove("p2sh");
-                }
-            }
-
             str = string.Join('-', parts.Where(p => !IsLabel(p)));
             foreach (var label in hintedLabels)
             {
                 str = $"{str}-[{label}]";
             }
 
-            return FindMatch(hintedLabels, BtcPayNetwork.NBXplorerNetwork.DerivationStrategyFactory.Parse(str));
+            return BtcPayNetwork.NBXplorerNetwork.DerivationStrategyFactory.Parse(str);
         }
 
         public static BitcoinExtPubKey GetBitcoinExtPubKeyByNetwork(Network network, byte[] data)
@@ -163,27 +208,6 @@ namespace BTCPayServer
             }
         }
 
-        private DerivationStrategyBase FindMatch(HashSet<string> hintLabels, DerivationStrategyBase result)
-        {
-            var firstKeyPath = new KeyPath("0/0");
-            if (HintScriptPubKey == null)
-                return result;
-            if (HintScriptPubKey == result.GetDerivation(firstKeyPath).ScriptPubKey)
-                return result;
-
-            if (result is MultisigDerivationStrategy)
-                hintLabels.Add("keeporder");
-
-            var resultNoLabels = result.ToString();
-            resultNoLabels = string.Join('-', resultNoLabels.Split('-').Where(p => !IsLabel(p)));
-            foreach (var labels in ItemCombinations(hintLabels.ToList()))
-            {
-                var hinted = BtcPayNetwork.NBXplorerNetwork.DerivationStrategyFactory.Parse(resultNoLabels + '-' + string.Join('-', labels.Select(l => $"[{l}]").ToArray()));
-                if (HintScriptPubKey == hinted.GetDerivation(firstKeyPath).ScriptPubKey)
-                    return hinted;
-            }
-            throw new FormatException("Could not find any match");
-        }
 
         private static bool IsLabel(string v)
         {

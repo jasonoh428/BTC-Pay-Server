@@ -1,35 +1,25 @@
 var app = null;
 var eventAggregator = new Vue();
 
-function addLoadEvent(func) {
-    var oldonload = window.onload;
-    if (typeof window.onload != 'function') {
-        window.onload = func;
-    } else {
-        window.onload = function() {
-            if (oldonload) {
-                oldonload();
-            }
-            func();
-        }
-    }
-}
-addLoadEvent(function (ev) {
+document.addEventListener("DOMContentLoaded",function (ev) {
     Vue.use(Toasted);
 
     Vue.component('contribute', {
-        props: ["targetCurrency", "active", "perks", "inModal", "displayPerksRanking", "loading"],
+        props: ["targetCurrency", "active", "perks", "inModal", "displayPerksRanking", "perksValue", "loading"],
         template: "#contribute-template"
     });
 
     Vue.component('perks', {
-        props: ["perks", "targetCurrency", "active", "inModal","displayPerksRanking", "loading"],
+        props: ["perks", "targetCurrency", "active", "inModal","displayPerksRanking", "perksValue", "loading"],
         template: "#perks-template"
     });
 
     Vue.component('perk', {
-        props: ["perk", "targetCurrency", "active", "inModal", "displayPerksRanking", "index", "loading"],
-        template: "#perk-template",
+        props: ["perk", "targetCurrency", "active", "inModal", "displayPerksRanking", "perksValue", "index", "loading"],
+        template:  "#perk-template",
+        components: {
+            qrcode: VueQrcode
+        },
         data: function () {
             return {
                 amount: null,
@@ -38,7 +28,9 @@ addLoadEvent(function (ev) {
         },
         computed: {
             canExpand: function(){
-                return !this.expanded && this.active && (this.perk.price.value || this.perk.custom) && (this.perk.inventory==null || this.perk.inventory > 0)
+                return !this.expanded 
+                    && this.active && 
+                    (this.perk.inventory==null || this.perk.inventory > 0)
             }
         },
         methods: {
@@ -58,23 +50,22 @@ addLoadEvent(function (ev) {
                 }
             },
             setAmount: function (amount) {
-                this.amount = (amount || 0).noExponents();
+                this.amount = this.perk.price.type === 0? null : (amount || 0).noExponents();
                 this.expanded = false;
             }
-
-
         },
         mounted: function () {
             this.setAmount(this.perk.price.value);
         },
         watch: {
             perk: function (newValue, oldValue) {
-                if (newValue.price.value != oldValue.price.value) {
+                if(newValue.price.type ===0){
+                    this.setAmount();
+                }else if (newValue.price.value != oldValue.price.value) {
                     this.setAmount(newValue.price.value);
                 }
             }
         }
-        
     });
     
     app = new Vue({
@@ -93,14 +84,17 @@ addLoadEvent(function (ev) {
                 active: true,
                 animation: true, 
                 sound: true,
-                lastUpdated:"",
+                lastUpdated: "",
                 loading: false,
                 timeoutState: 0
             }
         },
         computed: {
             raisedAmount: function(){
-               return parseFloat(this.srvModel.info.currentAmount + this.srvModel.info.currentPendingAmount ).toFixed(this.srvModel.currencyData.divisibility) ;
+                return this.formatAmount(this.srvModel.info.currentAmount + this.srvModel.info.currentPendingAmount);
+            },
+            targetAmount: function(){
+                return this.formatAmount(this.srvModel.targetAmount);
             },
             percentageRaisedAmount: function(){
                 return parseFloat(this.srvModel.info.progressPercentage + this.srvModel.info.pendingProgressPercentage ).toFixed(2);
@@ -159,6 +153,9 @@ addLoadEvent(function (ev) {
                     if(this.srvModel.perkCount.hasOwnProperty(currentPerk.id)){
                         currentPerk.sold = this.srvModel.perkCount[currentPerk.id];
                     }
+                    if(this.srvModel.perkValue.hasOwnProperty(currentPerk.id)){
+                        currentPerk.value = this.srvModel.perkValue[currentPerk.id];
+                    }
                     result.push(currentPerk);
                 }
                 return result;
@@ -211,6 +208,9 @@ addLoadEvent(function (ev) {
                 if(this.timeoutState){
                     clearTimeout(this.timeoutState);
                 }
+            },
+            formatAmount: function(amount) {
+                return formatAmount(amount, this.srvModel.currencyData.divisibility)
             }
         },
         mounted: function () {
@@ -219,8 +219,7 @@ addLoadEvent(function (ev) {
             this.sound = this.srvModel.soundsEnabled;
             this.animation = this.srvModel.animationsEnabled;
             eventAggregator.$on("invoice-created", function (invoiceId) {
-                btcpay.showInvoice(invoiceId);
-                btcpay.showFrame();
+                btcpay.appendAndShowInvoiceFrame(invoiceId);
 
                 self.contributeModalOpen = false;
                 self.setLoading(false);
@@ -323,3 +322,18 @@ addLoadEvent(function (ev) {
     });
 });
 
+/**
+ * Formats input string as a number according to browser locale
+ * with correctly displayed fraction amount (e.g. 0.012345 for BTC instead of just 0.0123)
+ * 
+ * @param {number | string} amount Amount to format
+ * @param {number} divisibility Currency divisibility (e.g., 8 for BTC)
+ * @returns String formatted as a number according to current browser locale and correct fraction amount
+ */
+function formatAmount(amount, divisibility) {
+    var parsedAmount = parseFloat(amount).toFixed(divisibility);
+    var [wholeAmount, fractionAmount] = parsedAmount.split('.');
+    var formattedWholeAmount = new Intl.NumberFormat().format(parseInt(wholeAmount, 10));
+
+    return formattedWholeAmount + (fractionAmount ? '.' + fractionAmount : '');
+}

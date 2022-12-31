@@ -13,15 +13,18 @@ namespace BTCPayServer.Services
             _httpClientFactory = httpClientFactory;
         }
 
+        public static string OnionNamedClient { get; set; } = "lightning.onion";
+
         public ILightningClient Create(LightningConnectionString lightningConnectionString, BTCPayNetwork network)
         {
-            if (lightningConnectionString == null)
-                throw new ArgumentNullException(nameof(lightningConnectionString));
-            if (network == null)
-                throw new ArgumentNullException(nameof(network));
-            return new Lightning.LightningClientFactory(network.NBitcoinNetwork)
+            ArgumentNullException.ThrowIfNull(lightningConnectionString);
+            ArgumentNullException.ThrowIfNull(network);
+
+            return new LightningClientFactory(network.NBitcoinNetwork)
             {
-                HttpClient = _httpClientFactory.CreateClient($"{network.CryptoCode}: Lightning client")
+                HttpClient = _httpClientFactory.CreateClient(lightningConnectionString.BaseUri.IsOnion()
+                    ? OnionNamedClient
+                    : $"{network.CryptoCode}: Lightning client")
             }.Create(lightningConnectionString);
         }
     }

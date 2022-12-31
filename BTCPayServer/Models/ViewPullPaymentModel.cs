@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using BTCPayServer.Abstractions.Extensions;
+using BTCPayServer.Client.Models;
 using BTCPayServer.Data;
+using BTCPayServer.Payments;
 using BTCPayServer.Services.Rates;
-using BTCPayServer.Views;
+using PullPaymentData = BTCPayServer.Data.PullPaymentData;
 
 namespace BTCPayServer.Models
 {
@@ -15,9 +19,14 @@ namespace BTCPayServer.Models
         public ViewPullPaymentModel(PullPaymentData data, DateTimeOffset now)
         {
             Id = data.Id;
+            StoreId = data.StoreId;
             var blob = data.GetBlob();
+            PaymentMethods = blob.SupportedPaymentMethods;
+            SelectedPaymentMethod = PaymentMethods.First().ToString();
             Archived = data.Archived;
+            AutoApprove = blob.AutoApproveClaims;
             Title = blob.View.Title;
+            Description = blob.View.Description;
             Amount = blob.Limit;
             Currency = blob.Currency;
             Description = blob.View.Description;
@@ -56,6 +65,13 @@ namespace BTCPayServer.Models
                 ResetIn = resetIn.TimeString();
             }
         }
+
+        public string StoreId { get; set; }
+
+        public string SelectedPaymentMethod { get; set; }
+
+        public PaymentMethodId[] PaymentMethods { get; set; }
+
         public string HubPath { get; set; }
         public string ResetIn { get; set; }
         public string Email { get; set; }
@@ -75,23 +91,26 @@ namespace BTCPayServer.Models
         public string Description { get; set; }
         public string EmbeddedCSS { get; set; }
         public string CustomCSSLink { get; set; }
-        public List<PayoutLine> Payouts { get; set; } = new List<PayoutLine>();
-        public DateTime LastUpdated { get; set; }
+        public List<PayoutLine> Payouts { get; set; } = new ();
+        public DateTimeOffset StartDate { get; set; }
+        public DateTime LastRefreshed { get; set; }
         public CurrencyData CurrencyData { get; set; }
         public string AmountCollectedFormatted { get; set; }
         public string AmountFormatted { get; set; }
         public bool Archived { get; set; }
+        public bool AutoApprove { get; set; }
 
         public class PayoutLine
         {
             public string Id { get; set; }
             public decimal Amount { get; set; }
             public string AmountFormatted { get; set; }
-            public string Status { get; set; }
+            public PayoutState Status { get; set; }
             public string Destination { get; set; }
             public string Currency { get; set; }
             public string Link { get; set; }
             public string TransactionId { get; set; }
+            public PaymentMethodId PaymentMethod { get; set; }
         }
     }
 }

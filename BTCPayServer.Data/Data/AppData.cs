@@ -8,33 +8,12 @@ namespace BTCPayServer.Data
     {
         public string Id { get; set; }
         public string Name { get; set; }
-        public string StoreDataId
-        {
-            get; set;
-        }
+        public string StoreDataId { get; set; }
         public string AppType { get; set; }
-        public StoreData StoreData
-        {
-            get; set;
-        }
-        public DateTimeOffset Created
-        {
-            get; set;
-        }
+        public StoreData StoreData { get; set; }
+        public DateTimeOffset Created { get; set; }
         public bool TagAllInvoices { get; set; }
         public string Settings { get; set; }
-
-        public T GetSettings<T>() where T : class, new()
-        {
-            if (String.IsNullOrEmpty(Settings))
-                return new T();
-            return JsonConvert.DeserializeObject<T>(Settings);
-        }
-
-        public void SetSettings(object value)
-        {
-            Settings = value == null ? null : JsonConvert.SerializeObject(value);
-        }
 
         internal static void OnModelCreating(ModelBuilder builder)
         {
@@ -43,6 +22,17 @@ namespace BTCPayServer.Data
                        .WithMany(i => i.Apps).OnDelete(DeleteBehavior.Cascade);
             builder.Entity<AppData>()
                     .HasOne(a => a.StoreData);
+        }
+
+        // utility methods
+        public T GetSettings<T>() where T : class, new()
+        {
+            return string.IsNullOrEmpty(Settings) ? new T() : JsonConvert.DeserializeObject<T>(Settings);
+        }
+
+        public void SetSettings(object value)
+        {
+            Settings = value == null ? null : JsonConvert.SerializeObject(value);
         }
     }
 }

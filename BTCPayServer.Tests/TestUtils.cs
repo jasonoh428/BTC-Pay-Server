@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using OpenQA.Selenium;
 using Xunit;
 using Xunit.Sdk;
 
@@ -88,6 +89,10 @@ namespace BTCPayServer.Tests
                     act();
                     break;
                 }
+                catch (WebDriverException) when (!cts.Token.IsCancellationRequested)
+                {
+                    cts.Token.WaitHandle.WaitOne(500);
+                }
                 catch (XunitException) when (!cts.Token.IsCancellationRequested)
                 {
                     cts.Token.WaitHandle.WaitOne(500);
@@ -95,9 +100,9 @@ namespace BTCPayServer.Tests
             }
         }
 
-        public static async Task EventuallyAsync(Func<Task> act)
+        public static async Task EventuallyAsync(Func<Task> act, int delay = 20000)
         {
-            CancellationTokenSource cts = new CancellationTokenSource(20000);
+            CancellationTokenSource cts = new CancellationTokenSource(delay);
             while (true)
             {
                 try
@@ -107,7 +112,7 @@ namespace BTCPayServer.Tests
                 }
                 catch (XunitException) when (!cts.Token.IsCancellationRequested)
                 {
-                    await Task.Delay(500);
+                    await Task.Delay(500, cts.Token);
                 }
             }
         }

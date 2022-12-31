@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
@@ -17,7 +18,6 @@ namespace BTCPayServer.Client
         private readonly string _username;
         private readonly string _password;
         private readonly HttpClient _httpClient;
-
         public Uri Host => _btcpayHost;
 
         public string APIKey => _apiKey;
@@ -47,27 +47,49 @@ namespace BTCPayServer.Client
 
         protected async Task HandleResponse(HttpResponseMessage message)
         {
-            if (message.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+            if (!message.IsSuccessStatusCode && message.Content?.Headers?.ContentType?.MediaType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) is true)
             {
-                var err = JsonConvert.DeserializeObject<Models.GreenfieldValidationError[]>(await message.Content.ReadAsStringAsync());
-                ;
-                throw new GreenFieldValidationException(err);
+                if (message.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+                {
+                    var err = JsonConvert.DeserializeObject<Models.GreenfieldValidationError[]>(await message.Content.ReadAsStringAsync());
+                    throw new GreenfieldValidationException(err);
+                }
+                if (message.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    var err = JsonConvert.DeserializeObject<Models.GreenfieldPermissionAPIError>(await message.Content.ReadAsStringAsync());
+                    throw new GreenfieldAPIException((int)message.StatusCode, err);
+                }
+                else
+                {
+                    var err = JsonConvert.DeserializeObject<Models.GreenfieldAPIError>(await message.Content.ReadAsStringAsync());
+                    if (err.Code != null)
+                        throw new GreenfieldAPIException((int)message.StatusCode, err);
+                }
             }
-            else if (message.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            {
-                var err = JsonConvert.DeserializeObject<Models.GreenfieldAPIError>(await message.Content.ReadAsStringAsync());
-                throw new GreenFieldAPIException(err);
-            }
-
             message.EnsureSuccessStatusCode();
         }
 
         protected async Task<T> HandleResponse<T>(HttpResponseMessage message)
         {
             await HandleResponse(message);
-            return JsonConvert.DeserializeObject<T>(await message.Content.ReadAsStringAsync());
+            var str = await message.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<T>(str);
         }
 
+        public async Task<T> SendHttpRequest<T>(string path,
+            Dictionary<string, object> queryPayload = null,
+            HttpMethod method = null, CancellationToken cancellationToken = default)
+        {
+            using var resp = await _httpClient.SendAsync(CreateHttpRequest(path, queryPayload, method), cancellationToken);
+            return await HandleResponse<T>(resp);
+        }
+        public async Task<T> SendHttpRequest<T>(string path,
+        object bodyPayload = null,
+        HttpMethod method = null, CancellationToken cancellationToken = default)
+        {
+            using var resp = await _httpClient.SendAsync(CreateHttpRequest(path: path, bodyPayload: bodyPayload, method: method), cancellationToken);
+            return await HandleResponse<T>(resp);
+        }
         protected virtual HttpRequestMessage CreateHttpRequest(string path,
             Dictionary<string, object> queryPayload = null,
             HttpMethod method = null)

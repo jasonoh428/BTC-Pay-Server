@@ -10,7 +10,7 @@ namespace BTCPayServer.HostedServices
 {
     public class DynamicDnsHostedService : BaseAsyncService
     {
-        public DynamicDnsHostedService(IHttpClientFactory httpClientFactory, SettingsRepository settingsRepository)
+        public DynamicDnsHostedService(IHttpClientFactory httpClientFactory, SettingsRepository settingsRepository, Logs logs) : base(logs)
         {
             HttpClientFactory = httpClientFactory;
             SettingsRepository = settingsRepository;
@@ -59,13 +59,11 @@ namespace BTCPayServer.HostedServices
                     }
                 }
             }
-            using (var delayCancel = CancellationTokenSource.CreateLinkedTokenSource(Cancellation))
-            {
-                var delay = Task.Delay(Period, delayCancel.Token);
-                var changed = SettingsRepository.WaitSettingsChanged<DynamicDnsSettings>(Cancellation);
-                await Task.WhenAny(delay, changed);
-                delayCancel.Cancel();
-            }
+            using var delayCancel = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
+            var delay = Task.Delay(Period, delayCancel.Token);
+            var changed = SettingsRepository.WaitSettingsChanged<DynamicDnsSettings>(Cancellation);
+            await Task.WhenAny(delay, changed);
+            delayCancel.Cancel();
         }
     }
 }

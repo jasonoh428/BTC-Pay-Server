@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using BTCPayServer.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace BTCPayServer.Security.GreenField
+namespace BTCPayServer.Security.Greenfield
 {
     public class APIKeyRepository
     {
@@ -16,30 +16,29 @@ namespace BTCPayServer.Security.GreenField
             _applicationDbContextFactory = applicationDbContextFactory;
         }
 
-        public async Task<APIKeyData> GetKey(string apiKey)
+        public async Task<APIKeyData> GetKey(string apiKey, bool includeUser = false)
         {
-            using (var context = _applicationDbContextFactory.CreateContext())
+            await using var context = _applicationDbContextFactory.CreateContext();
+            if (includeUser)
             {
-                return await EntityFrameworkQueryableExtensions.SingleOrDefaultAsync(context.ApiKeys,
-                    data => data.Id == apiKey && data.Type != APIKeyType.Legacy);
+                return await context.ApiKeys.Include(data => data.User).SingleOrDefaultAsync(data => data.Id == apiKey && data.Type != APIKeyType.Legacy);
             }
+            return await context.ApiKeys.SingleOrDefaultAsync(data => data.Id == apiKey && data.Type != APIKeyType.Legacy);
         }
 
         public async Task<List<APIKeyData>> GetKeys(APIKeyQuery query)
         {
-            using (var context = _applicationDbContextFactory.CreateContext())
+            using var context = _applicationDbContextFactory.CreateContext();
+            var queryable = context.ApiKeys.AsQueryable();
+            if (query != null)
             {
-                var queryable = context.ApiKeys.AsQueryable();
-                if (query != null)
+                if (query.UserId != null && query.UserId.Any())
                 {
-                    if (query.UserId != null && query.UserId.Any())
-                    {
-                        queryable = queryable.Where(data => query.UserId.Contains(data.UserId));
-                    }
+                    queryable = queryable.Where(data => query.UserId.Contains(data.UserId));
                 }
-
-                return await queryable.ToListAsync();
             }
+
+            return await queryable.ToListAsync();
         }
 
         public async Task CreateKey(APIKeyData key)
@@ -49,11 +48,9 @@ namespace BTCPayServer.Security.GreenField
                 throw new InvalidOperationException("cannot save a bitpay legacy api key with this repository");
             }
 
-            using (var context = _applicationDbContextFactory.CreateContext())
-            {
-                await context.ApiKeys.AddAsync(key);
-                await context.SaveChangesAsync();
-            }
+            using var context = _applicationDbContextFactory.CreateContext();
+            await context.ApiKeys.AddAsync(key);
+            await context.SaveChangesAsync();
         }
 
         public async Task<bool> Remove(string id, string getUserId)

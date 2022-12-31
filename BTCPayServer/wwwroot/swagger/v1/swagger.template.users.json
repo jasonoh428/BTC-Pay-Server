@@ -18,12 +18,39 @@
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "The user could not be found"
                     }
                 },
                 "security": [
                     {
-                        "API Key": [
+                        "API_Key": [
                             "btcpay.user.canviewprofile"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Deletes user profile",
+                "description": "Deletes user profile and associated user data for user making the request",
+                "operationId": "Users_DeleteCurrentUser",
+                "responses": {
+                    "200": {
+                        "description": "User and associated data deleted successfully"
+                    },
+                    "404": {
+                        "description": "The user could not be found"
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.user.candeleteuser"
                         ],
                         "Basic": []
                     }
@@ -31,7 +58,36 @@
             }
         },
         "/api/v1/users": {
+            "get": {
+                "operationId": "Users_GetUsers",
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get all users",
+                "description": "Load all users that exist.",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Users found"
+                    },
+                    "401": {
+                        "description": "Missing authorization for loading the users"
+                    },
+                    "403": {
+                        "description": "Authorized but forbidden to load the users. You have the wrong API permissions."
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.server.canviewusers"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            },
             "post": {
+                "operationId": "Users_CreateUser",
                 "tags": [
                     "Users"
                 ],
@@ -100,8 +156,145 @@
                 },
                 "security": [
                     {
-                        "API Key": [
+                        "API_Key": [
                             "btcpay.server.cancreateuser"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/users/{idOrEmail}": {
+            "get": {
+                "operationId": "Users_GetUser",
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Get user by ID or Email",
+                "description": "Get 1 user by ID or Email.",
+                "parameters": [
+                    {
+                        "name": "idOrEmail",
+                        "in": "path",
+                        "required": true,
+                        "description": "The ID or email of the user to load",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User found"
+                    },
+                    "401": {
+                        "description": "Missing authorization for loading the user"
+                    },
+                    "403": {
+                        "description": "Authorized but forbidden to load the user. You have the wrong API permissions."
+                    },
+                    "404": {
+                        "description": "No user found with this ID or email"
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.server.canviewusers"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            },
+            "delete": {
+                "operationId": "Users_DeleteUser",
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Delete user",
+                "description": "Delete a user.\n\nMust be an admin to perform this operation.\n\nAttempting to delete the only admin user will not succeed.\n\nAll data associated with the user will be deleted as well if the operation succeeds.",
+                "parameters": [
+                    {
+                        "name": "idOrEmail",
+                        "in": "path",
+                        "required": true,
+                        "description": "The ID of the user to be deleted",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User has been successfully deleted"
+                    },
+                    "401": {
+                        "description": "Missing authorization for deleting the user"
+                    },
+                    "403": {
+                        "description": "Authorized but forbidden to delete the user. Can happen if you attempt to delete the only admin user."
+                    },
+                    "404": {
+                        "description": "User with provided ID was not found"
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.user.candeleteuser"
+                        ],
+                        "Basic": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/users/{idOrEmail}/lock": {
+            "post": {
+                "operationId": "Users_ToggleUserLock",
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Toggle user",
+                "description": "Lock or unlock a user.\n\nMust be an admin to perform this operation.\n\nAttempting to lock the only admin user will not succeed.",
+                "parameters": [
+                    {
+                        "name": "idOrEmail",
+                        "in": "path",
+                        "required": true,
+                        "description": "The ID of the user to be un/locked",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "x-name": "request",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LockUserRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "User has been successfully toggled"
+                    },
+                    "401": {
+                        "description": "Missing authorization for deleting the user"
+                    },
+                    "403": {
+                        "description": "Authorized but forbidden to disable  the user. Can happen if you attempt to disable the only admin user."
+                    },
+                    "404": {
+                        "description": "User with provided ID was not found"
+                    }
+                },
+                "security": [
+                    {
+                        "API_Key": [
+                            "btcpay.user.canmodifyserversettings"
                         ],
                         "Basic": []
                     }
@@ -117,12 +310,12 @@
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "The id of the new user",
+                        "description": "The id of the user",
                         "nullable": false
                     },
                     "email": {
                         "type": "string",
-                        "description": "The email of the new user",
+                        "description": "The email of the user",
                         "nullable": false
                     },
                     "emailConfirmed": {
@@ -132,6 +325,33 @@
                     "requiresEmailConfirmation": {
                         "type": "boolean",
                         "description": "True if the email requires email confirmation to log in"
+                    },
+                    "created": {
+                        "nullable": true,
+                        "description": "The creation date of the user as a unix timestamp. Null if created before v1.0.5.6",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/UnixTimestamp"
+                            }
+                        ]
+                    },
+                    "roles": {
+                        "type": "array",
+                        "nullable": false,
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "The roles of the user"
+                    }
+                }
+            },
+            "LockUserRequest": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "locked": {
+                        "type": "boolean",
+                        "description": "Whether to lock or unlock the user"
                     }
                 }
             }
@@ -139,7 +359,8 @@
     },
     "tags": [
         {
-            "name": "Users"
+            "name": "Users",
+            "description": "User operations"
         }
     ]
 }

@@ -7,6 +7,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using BTCPayServer.Abstractions.Constants;
+using BTCPayServer.Abstractions.Extensions;
+using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Client;
 using BTCPayServer.Data;
 using BTCPayServer.Filters;
@@ -30,14 +33,14 @@ namespace BTCPayServer.Services.Altcoins.Monero.UI
     [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie)]
     [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
     [Authorize(Policy = Policies.CanModifyServerSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
-    public class MoneroLikeStoreController : Controller
+    public class UIMoneroLikeStoreController : Controller
     {
         private readonly MoneroLikeConfiguration _MoneroLikeConfiguration;
         private readonly StoreRepository _StoreRepository;
         private readonly MoneroRPCProvider _MoneroRpcProvider;
         private readonly BTCPayNetworkProvider _BtcPayNetworkProvider;
 
-        public MoneroLikeStoreController(MoneroLikeConfiguration moneroLikeConfiguration,
+        public UIMoneroLikeStoreController(MoneroLikeConfiguration moneroLikeConfiguration,
             StoreRepository storeRepository, MoneroRPCProvider moneroRpcProvider,
             BTCPayNetworkProvider btcPayNetworkProvider)
         {
@@ -126,6 +129,7 @@ namespace BTCPayServer.Services.Altcoins.Monero.UI
         }
 
         [HttpPost("{cryptoCode}")]
+        [DisableRequestSizeLimit]
         public async Task<IActionResult> GetStoreMoneroLikePaymentMethod(MoneroLikePaymentMethodViewModel viewModel, string command, string cryptoCode)
         {
             cryptoCode = cryptoCode.ToUpperInvariant();
@@ -147,7 +151,7 @@ namespace BTCPayServer.Services.Altcoins.Monero.UI
                 }
                 catch (Exception)
                 {
-                    ModelState.AddModelError(nameof(viewModel.AccountIndex), "Could not create new account.");
+                    ModelState.AddModelError(nameof(viewModel.AccountIndex), "Could not create a new account.");
                 }
 
             }
@@ -156,12 +160,12 @@ namespace BTCPayServer.Services.Altcoins.Monero.UI
                 var valid = true;
                 if (viewModel.WalletFile == null)
                 {
-                    ModelState.AddModelError(nameof(viewModel.WalletFile), "Please select the wallet file");
+                    ModelState.AddModelError(nameof(viewModel.WalletFile), "Please select the view-only wallet file");
                     valid = false;
                 }
                 if (viewModel.WalletKeysFile == null)
                 {
-                    ModelState.AddModelError(nameof(viewModel.WalletKeysFile), "Please select the wallet.keys file");
+                    ModelState.AddModelError(nameof(viewModel.WalletKeysFile), "Please select the view-only wallet keys file");
                     valid = false;
                 }
 
@@ -174,7 +178,7 @@ namespace BTCPayServer.Services.Altcoins.Monero.UI
                             TempData.SetStatusMessageModel(new StatusMessageModel()
                             {
                                 Severity = StatusMessageModel.StatusSeverity.Error,
-                                Message = $"There is already an active wallet configured for {cryptoCode}. Replacing it would break any existing invoices"
+                                Message = $"There is already an active wallet configured for {cryptoCode}. Replacing it would break any existing invoices!"
                             });
                             return RedirectToAction(nameof(GetStoreMoneroLikePaymentMethod),
                                 new { cryptoCode });
@@ -224,7 +228,7 @@ namespace BTCPayServer.Services.Altcoins.Monero.UI
                     return RedirectToAction(nameof(GetStoreMoneroLikePaymentMethod), new
                     {
                         cryptoCode,
-                        StatusMessage = "Wallet files uploaded. If it was valid, the wallet will become available soon"
+                        StatusMessage = "View-only wallet files uploaded. If they are valid the wallet will soon become available."
 
                     });
                 }
@@ -277,7 +281,9 @@ namespace BTCPayServer.Services.Altcoins.Monero.UI
                 }
             };
 
+#pragma warning disable CA1416 // Validate platform compatibility
             process.Start();
+#pragma warning restore CA1416 // Validate platform compatibility
             process.WaitForExit();
         }
 

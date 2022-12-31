@@ -13,34 +13,28 @@ namespace BTCPayServer.Services.PaymentRequests
     {
         private readonly ApplicationDbContextFactory _ContextFactory;
         private readonly InvoiceRepository _InvoiceRepository;
-        private readonly StoreRepository _storeRepository;
 
-        public PaymentRequestRepository(ApplicationDbContextFactory contextFactory, InvoiceRepository invoiceRepository,
-            StoreRepository storeRepository)
+        public PaymentRequestRepository(ApplicationDbContextFactory contextFactory, InvoiceRepository invoiceRepository)
         {
             _ContextFactory = contextFactory;
             _InvoiceRepository = invoiceRepository;
-            _storeRepository = storeRepository;
         }
-
 
         public async Task<PaymentRequestData> CreateOrUpdatePaymentRequest(PaymentRequestData entity)
         {
-            using (var context = _ContextFactory.CreateContext())
+            await using var context = _ContextFactory.CreateContext();
+            if (string.IsNullOrEmpty(entity.Id))
             {
-                if (string.IsNullOrEmpty(entity.Id))
-                {
-                    entity.Id = Guid.NewGuid().ToString();
-                    await context.PaymentRequests.AddAsync(entity);
-                }
-                else
-                {
-                    context.PaymentRequests.Update(entity);
-                }
-
-                await context.SaveChangesAsync();
-                return entity;
+                entity.Id = Guid.NewGuid().ToString();
+                await context.PaymentRequests.AddAsync(entity);
             }
+            else
+            {
+                context.PaymentRequests.Update(entity);
+            }
+
+            await context.SaveChangesAsync();
+            return entity;
         }
 
         public async Task<PaymentRequestData> FindPaymentRequest(string id, string userId, CancellationToken cancellationToken = default)
@@ -50,15 +44,13 @@ namespace BTCPayServer.Services.PaymentRequests
                 return null;
             }
 
-            using (var context = _ContextFactory.CreateContext())
-            {
-                var result = await context.PaymentRequests.Include(x => x.StoreData)
-                    .Where(data =>
-                        string.IsNullOrEmpty(userId) ||
-                        (data.StoreData != null && data.StoreData.UserStores.Any(u => u.ApplicationUserId == userId)))
-                    .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-                return result;
-            }
+            using var context = _ContextFactory.CreateContext();
+            var result = await context.PaymentRequests.Include(x => x.StoreData)
+                .Where(data =>
+                    string.IsNullOrEmpty(userId) ||
+                    (data.StoreData != null && data.StoreData.UserStores.Any(u => u.ApplicationUserId == userId)))
+                .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            return result;
         }
 
         public async Task<bool> IsPaymentRequestAdmin(string paymentRequestId, string userId)
@@ -67,76 +59,69 @@ namespace BTCPayServer.Services.PaymentRequests
             {
                 return false;
             }
-            using (var context = _ContextFactory.CreateContext())
-            {
-                return await context.PaymentRequests.Include(x => x.StoreData)
-                    .AnyAsync(data =>
-                        data.Id == paymentRequestId &&
-                        (data.StoreData != null && data.StoreData.UserStores.Any(u => u.ApplicationUserId == userId)));
-            }
+            using var context = _ContextFactory.CreateContext();
+            return await context.PaymentRequests.Include(x => x.StoreData)
+                .AnyAsync(data =>
+                    data.Id == paymentRequestId &&
+                    (data.StoreData != null && data.StoreData.UserStores.Any(u => u.ApplicationUserId == userId)));
         }
 
         public async Task UpdatePaymentRequestStatus(string paymentRequestId, Client.Models.PaymentRequestData.PaymentRequestStatus status, CancellationToken cancellationToken = default)
         {
-            using (var context = _ContextFactory.CreateContext())
-            {
-                var invoiceData = await context.FindAsync<PaymentRequestData>(paymentRequestId);
-                if (invoiceData == null)
-                    return;
-                invoiceData.Status = status;
-                await context.SaveChangesAsync(cancellationToken);
-            }
+            using var context = _ContextFactory.CreateContext();
+            var invoiceData = await context.FindAsync<PaymentRequestData>(paymentRequestId);
+            if (invoiceData == null)
+                return;
+            invoiceData.Status = status;
+            await context.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<(int Total, PaymentRequestData[] Items)> FindPaymentRequests(PaymentRequestQuery query, CancellationToken cancellationToken = default)
+        public async Task<PaymentRequestData[]> FindPaymentRequests(PaymentRequestQuery query, CancellationToken cancellationToken = default)
         {
-            using (var context = _ContextFactory.CreateContext())
+            using var context = _ContextFactory.CreateContext();
+            var queryable = context.PaymentRequests.Include(data => data.StoreData).AsQueryable();
+
+            if (!query.IncludeArchived)
             {
-                var queryable = context.PaymentRequests.Include(data => data.StoreData).AsQueryable();
-
-                if (!query.IncludeArchived)
-                {
-                    queryable = queryable.Where(data => !data.Archived);
-                }
-                if (!string.IsNullOrEmpty(query.StoreId))
-                {
-                    queryable = queryable.Where(data =>
-                       data.StoreDataId == query.StoreId);
-                }
-
-                if (query.Status != null && query.Status.Any())
-                {
-                    queryable = queryable.Where(data =>
-                        query.Status.Contains(data.Status));
-                }
-
-                if (query.Ids != null && query.Ids.Any())
-                {
-                    queryable = queryable.Where(data =>
-                        query.Ids.Contains(data.Id));
-                }
-
-                if (!string.IsNullOrEmpty(query.UserId))
-                {
-                    queryable = queryable.Where(i =>
-                        i.StoreData != null && i.StoreData.UserStores.Any(u => u.ApplicationUserId == query.UserId));
-                }
-
-                var total = await queryable.CountAsync(cancellationToken);
-
-                queryable = queryable.OrderByDescending(u => u.Created);
-
-                if (query.Skip.HasValue)
-                {
-                    queryable = queryable.Skip(query.Skip.Value);
-                }
-
-                if (query.Count.HasValue)
-                {
-                    queryable = queryable.Take(query.Count.Value);
-                }
-                return (total, await queryable.ToArrayAsync(cancellationToken));
+                queryable = queryable.Where(data => !data.Archived);
             }
+            if (!string.IsNullOrEmpty(query.StoreId))
+            {
+                queryable = queryable.Where(data =>
+                   data.StoreDataId == query.StoreId);
+            }
+
+            if (query.Status != null && query.Status.Any())
+            {
+                queryable = queryable.Where(data =>
+                    query.Status.Contains(data.Status));
+            }
+
+            if (query.Ids != null && query.Ids.Any())
+            {
+                queryable = queryable.Where(data =>
+                    query.Ids.Contains(data.Id));
+            }
+
+            if (!string.IsNullOrEmpty(query.UserId))
+            {
+                queryable = queryable.Where(i =>
+                    i.StoreData != null && i.StoreData.UserStores.Any(u => u.ApplicationUserId == query.UserId));
+            }
+
+            queryable = queryable.OrderByDescending(u => u.Created);
+
+            if (query.Skip.HasValue)
+            {
+                queryable = queryable.Skip(query.Skip.Value);
+            }
+
+            if (query.Count.HasValue)
+            {
+                queryable = queryable.Take(query.Count.Value);
+            }
+            var items = await queryable.ToArrayAsync(cancellationToken);
+            return items;
         }
 
         public async Task<InvoiceEntity[]> GetInvoicesForPaymentRequest(string paymentRequestId,
@@ -148,7 +133,9 @@ namespace BTCPayServer.Services.PaymentRequests
             }
 
             invoiceQuery.OrderId = new[] { GetOrderIdForPaymentRequest(paymentRequestId) };
-            return await _InvoiceRepository.GetInvoices(invoiceQuery);
+            return (await _InvoiceRepository.GetInvoices(invoiceQuery))
+                .Where(i => i.InternalTags.Contains(GetInternalTag(paymentRequestId)))
+                .ToArray();
         }
 
         public static string GetOrderIdForPaymentRequest(string paymentRequestId)

@@ -25,39 +25,38 @@ namespace BTCPayServer.Services
         private readonly ExplorerClientProvider _explorerClientProvider;
         private readonly ApplicationDbContextFactory _dbContextFactory;
 
+        public Logs Logs { get; }
+
         public DelayedTransactionBroadcaster(
             BTCPayNetworkProvider networkProvider,
             ExplorerClientProvider explorerClientProvider,
-            Data.ApplicationDbContextFactory dbContextFactory)
+            Data.ApplicationDbContextFactory dbContextFactory,
+            Logs logs)
         {
-            if (explorerClientProvider == null)
-                throw new ArgumentNullException(nameof(explorerClientProvider));
+            ArgumentNullException.ThrowIfNull(explorerClientProvider);
             _networkProvider = networkProvider;
             _explorerClientProvider = explorerClientProvider;
             _dbContextFactory = dbContextFactory;
+            this.Logs = logs;
         }
 
         public async Task Schedule(DateTimeOffset broadcastTime, Transaction transaction, BTCPayNetwork network)
         {
-            if (transaction == null)
-                throw new ArgumentNullException(nameof(transaction));
-            if (network == null)
-                throw new ArgumentNullException(nameof(network));
-            using (var db = _dbContextFactory.CreateContext())
+            ArgumentNullException.ThrowIfNull(transaction);
+            ArgumentNullException.ThrowIfNull(network);
+            using var db = _dbContextFactory.CreateContext();
+            db.PlannedTransactions.Add(new PlannedTransaction()
             {
-                db.PlannedTransactions.Add(new PlannedTransaction()
-                {
-                    Id = $"{network.CryptoCode}-{transaction.GetHash()}",
-                    BroadcastAt = broadcastTime,
-                    Blob = transaction.ToBytes()
-                });
-                try
-                {
-                    await db.SaveChangesAsync();
-                }
-                catch (DbUpdateException)
-                {
-                }
+                Id = $"{network.CryptoCode}-{transaction.GetHash()}",
+                BroadcastAt = broadcastTime,
+                Blob = transaction.ToBytes()
+            });
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
             }
         }
 

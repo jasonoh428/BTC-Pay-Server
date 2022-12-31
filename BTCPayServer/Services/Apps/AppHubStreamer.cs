@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using BTCPayServer.Controllers;
 using BTCPayServer.Events;
 using BTCPayServer.HostedServices;
+using BTCPayServer.Logging;
 using Microsoft.AspNetCore.SignalR;
 
 namespace BTCPayServer.Services.Apps
@@ -14,7 +15,8 @@ namespace BTCPayServer.Services.Apps
 
         public AppHubStreamer(EventAggregator eventAggregator,
            IHubContext<AppHub> hubContext,
-           AppService appService) : base(eventAggregator)
+           AppService appService,
+           Logs logs) : base(eventAggregator, logs)
         {
             _appService = appService;
             _HubContext = hubContext;
@@ -23,7 +25,7 @@ namespace BTCPayServer.Services.Apps
         protected override void SubscribeToEvents()
         {
             Subscribe<InvoiceEvent>();
-            Subscribe<AppsController.AppUpdated>();
+            Subscribe<UIAppsController.AppUpdated>();
         }
 
         protected override async Task ProcessEvent(object evt, CancellationToken cancellationToken)
@@ -45,7 +47,7 @@ namespace BTCPayServer.Services.Apps
                     await InfoUpdated(appId);
                 }
             }
-            else if (evt is AppsController.AppUpdated app)
+            else if (evt is UIAppsController.AppUpdated app)
             {
                 await InfoUpdated(app.AppId);
             }

@@ -32,8 +32,16 @@ namespace BTCPayServer.Services.Altcoins.Monero.Payments
         public override PaymentType PaymentType => MoneroPaymentType.Instance;
 
         public override async Task<IPaymentMethodDetails> CreatePaymentMethodDetails(InvoiceLogs logs, MoneroSupportedPaymentMethod supportedPaymentMethod, PaymentMethod paymentMethod,
-            StoreData store, MoneroLikeSpecificBtcPayNetwork network, object preparePaymentObject)
+            StoreData store, MoneroLikeSpecificBtcPayNetwork network, object preparePaymentObject, IEnumerable<PaymentMethodId> invoicePaymentMethods)
         {
+            
+            if (preparePaymentObject is null)
+            {
+                return new MoneroLikeOnChainPaymentMethodDetails()
+                {
+                    Activated = false
+                };
+            }
 
             if (!_moneroRpcProvider.IsAvailable(network.CryptoCode))
                 throw new PaymentMethodUnavailableException($"Node or wallet not available");
@@ -49,7 +57,8 @@ namespace BTCPayServer.Services.Altcoins.Monero.Payments
                 NextNetworkFee = MoneroMoney.Convert(feeRatePerByte * 100),
                 AccountIndex = supportedPaymentMethod.AccountIndex,
                 AddressIndex = address.AddressIndex,
-                DepositAddress = address.Address
+                DepositAddress = address.Address,
+                Activated = true
             };
 
         }
@@ -73,19 +82,26 @@ namespace BTCPayServer.Services.Altcoins.Monero.Payments
             public Func<string, Task<CreateAddressResponse>> ReserveAddress;
         }
 
-        public override void PreparePaymentModel(PaymentModel model, InvoiceResponse invoiceResponse, StoreBlob storeBlob)
+        public override void PreparePaymentModel(PaymentModel model, InvoiceResponse invoiceResponse,
+            StoreBlob storeBlob, IPaymentMethod paymentMethod)
         {
-            var paymentMethodId = new PaymentMethodId(model.CryptoCode, PaymentType);
-            var cryptoInfo = invoiceResponse.CryptoInfo.First(o => o.GetpaymentMethodId() == paymentMethodId);
+            var paymentMethodId = paymentMethod.GetId();
             var network = _networkProvider.GetNetwork<MoneroLikeSpecificBtcPayNetwork>(model.CryptoCode);
-            model.IsLightning = false;
             model.PaymentMethodName = GetPaymentMethodName(network);
             model.CryptoImage = GetCryptoImage(network);
-            model.InvoiceBitcoinUrl = MoneroPaymentType.Instance.GetPaymentLink(network, new MoneroLikeOnChainPaymentMethodDetails()
+            if (model.Activated)
             {
-                DepositAddress = cryptoInfo.Address
-            }, cryptoInfo.Due, null);
-            model.InvoiceBitcoinUrlQR = model.InvoiceBitcoinUrl;
+                var cryptoInfo = invoiceResponse.CryptoInfo.First(o => o.GetpaymentMethodId() == paymentMethodId);
+                model.InvoiceBitcoinUrl = MoneroPaymentType.Instance.GetPaymentLink(network,
+                    new MoneroLikeOnChainPaymentMethodDetails() {DepositAddress = cryptoInfo.Address}, cryptoInfo.Due,
+                    null);
+                model.InvoiceBitcoinUrlQR = model.InvoiceBitcoinUrl;
+            }
+            else
+            {
+                model.InvoiceBitcoinUrl = "";
+                model.InvoiceBitcoinUrlQR = "";
+            }
         }
         public override string GetCryptoImage(PaymentMethodId paymentMethodId)
         {
@@ -98,13 +114,6 @@ namespace BTCPayServer.Services.Altcoins.Monero.Payments
             var network = _networkProvider.GetNetwork<MoneroLikeSpecificBtcPayNetwork>(paymentMethodId.CryptoCode);
             return GetPaymentMethodName(network);
         }
-
-        public override Task<string> IsPaymentMethodAllowedBasedOnInvoiceAmount(StoreBlob storeBlob, Dictionary<CurrencyPair, Task<RateResult>> rate, Money amount,
-            PaymentMethodId paymentMethodId)
-        {
-            return Task.FromResult<string>(null);
-        }
-
         public override IEnumerable<PaymentMethodId> GetSupportedPaymentMethods()
         {
             return _networkProvider.GetAll()

@@ -8,8 +8,7 @@ namespace BTCPayServer
 {
     public partial class BTCPayNetworkProvider
     {
-        readonly Dictionary<string, BTCPayNetworkBase> _Networks = new Dictionary<string, BTCPayNetworkBase>();
-
+        protected readonly Dictionary<string, BTCPayNetworkBase> _Networks = new Dictionary<string, BTCPayNetworkBase>();
 
         private readonly NBXplorerNetworkProvider _NBXplorerNetworkProvider;
         public NBXplorerNetworkProvider NBXplorerNetworkProvider
@@ -36,8 +35,8 @@ namespace BTCPayServer
         }
 
 
-        public NetworkType NetworkType { get; private set; }
-        public BTCPayNetworkProvider(NetworkType networkType)
+        public ChainName NetworkType { get; private set; }
+        public BTCPayNetworkProvider(ChainName networkType)
         {
             _NBXplorerNetworkProvider = new NBXplorerNetworkProvider(networkType);
             NetworkType = networkType;
@@ -48,16 +47,18 @@ namespace BTCPayServer
             InitLitecoin();
             InitBitcore();
             InitDogecoin();
-            InitBitcoinGold();
+            InitBGold();
             InitMonacoin();
             InitDash();
             InitFeathercoin();
+            InitAlthash();
             InitGroestlcoin();
             InitViacoin();
             InitMonero();
-            InitPolis();
+            InitZcash();
             InitChaincoin();
-            InitArgoneum();
+            // InitArgoneum();//their rate source is down 9/15/20.
+            // InitMonetaryUnit(); Not supported from Bittrex from 11/23/2022, dead shitcoin
 
             // Assume that electrum mappings are same as BTC if not specified
             foreach (var network in _Networks.Values.OfType<BTCPayNetwork>())
@@ -76,7 +77,7 @@ namespace BTCPayServer
             }
 
             // Disabled because of https://twitter.com/Cryptopia_NZ/status/1085084168852291586
-            //InitBitcoinplus();
+            //InitBPlus();
             //InitUfo();
 #endif
         }
@@ -91,8 +92,8 @@ namespace BTCPayServer
             return new BTCPayNetworkProvider(this, cryptoCodes);
         }
 
-        [Obsolete("To use only for legacy stuff")]
         public BTCPayNetwork BTC => GetNetwork<BTCPayNetwork>("BTC");
+        public BTCPayNetworkBase DefaultNetwork => BTC ?? GetAll().First();
 
         public void Add(BTCPayNetwork network)
         {
@@ -120,14 +121,18 @@ namespace BTCPayServer
         }
         public T GetNetwork<T>(string cryptoCode) where T : BTCPayNetworkBase
         {
-            if (cryptoCode == null)
-                throw new ArgumentNullException(nameof(cryptoCode));
+            ArgumentNullException.ThrowIfNull(cryptoCode);
             if (!_Networks.TryGetValue(cryptoCode.ToUpperInvariant(), out BTCPayNetworkBase network))
             {
                 if (cryptoCode == "XBT")
                     return GetNetwork<T>("BTC");
             }
             return network as T;
+        }
+        public bool TryGetNetwork<T>(string cryptoCode, out T network) where T : BTCPayNetworkBase
+        {
+            network = GetNetwork<T>(cryptoCode);
+            return network != null;
         }
     }
 }

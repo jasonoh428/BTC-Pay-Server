@@ -6,8 +6,7 @@ namespace BTCPayServer.Events
     {
         public InvoiceNeedUpdateEvent(string invoiceId)
         {
-            if (invoiceId == null)
-                throw new ArgumentNullException(nameof(invoiceId));
+            ArgumentNullException.ThrowIfNull(invoiceId);
             InvoiceId = invoiceId;
         }
 
@@ -15,7 +14,7 @@ namespace BTCPayServer.Events
 
         public override string ToString()
         {
-            return string.Empty;
+            return $"Invoice {InvoiceId} needs update";
         }
     }
 }

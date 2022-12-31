@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using BTCPayServer.Logging;
 using Microsoft.Extensions.Logging;
@@ -11,10 +12,13 @@ namespace BTCPayServer
     public interface IEventAggregatorSubscription : IDisposable
     {
         void Unsubscribe();
-        void Resubscribe();
     }
     public class EventAggregator : IDisposable
     {
+        public EventAggregator(Logs logs)
+        {
+            Logs = logs;
+        }
         class Subscription : IEventAggregatorSubscription
         {
             private readonly EventAggregator aggregator;
@@ -46,11 +50,6 @@ namespace BTCPayServer
                 }
             }
 
-            public void Resubscribe()
-            {
-                aggregator.Subscribe(t, this);
-            }
-
             public void Unsubscribe()
             {
                 Dispose();
@@ -77,8 +76,7 @@ namespace BTCPayServer
 
         public void Publish(object evt, Type evtType)
         {
-            if (evt == null)
-                throw new ArgumentNullException(nameof(evt));
+            ArgumentNullException.ThrowIfNull(evt);
             List<Action<object>> actionList = new List<Action<object>>();
             lock (_Subscriptions)
             {
@@ -112,6 +110,13 @@ namespace BTCPayServer
             return Subscribe(eventType, s);
         }
 
+        public IEventAggregatorSubscription Subscribe(Type eventType, Action<IEventAggregatorSubscription, object> subscription)
+        {
+            var s = new Subscription(this, eventType);
+            s.Act = (o) => subscription(s, o);
+            return Subscribe(eventType, s);
+        }
+
         private IEventAggregatorSubscription Subscribe(Type eventType, Subscription subscription)
         {
             lock (_Subscriptions)
@@ -128,6 +133,8 @@ namespace BTCPayServer
 
         readonly Dictionary<Type, Dictionary<Subscription, Action<object>>> _Subscriptions = new Dictionary<Type, Dictionary<Subscription, Action<object>>>();
 
+        public Logs Logs { get; }
+
         public IEventAggregatorSubscription Subscribe<T, TReturn>(Func<T, TReturn> subscription)
         {
             return Subscribe(new Action<T>((t) => subscription(t)));
@@ -137,7 +144,54 @@ namespace BTCPayServer
         {
             return Subscribe(new Action<IEventAggregatorSubscription, T>((sub, t) => subscription(sub, t)));
         }
+        class ChannelSubscription<T> : IEventAggregatorSubscription
+        {
+            private Channel<T> _evts;
+            private IEventAggregatorSubscription _innerSubscription;
+            private Func<T, Task> _act;
+            private Logs _logs;
 
+            public ChannelSubscription(Channel<T> evts, IEventAggregatorSubscription innerSubscription, Func<T, Task> act, Logs logs)
+            {
+                _evts = evts;
+                _innerSubscription = innerSubscription;
+                _act = act;
+                _logs = logs;
+                _ = Listen();
+            }
+
+            private async Task Listen()
+            {
+                await foreach (var item in _evts.Reader.ReadAllAsync())
+                {
+                    try
+                    {
+                        await _act(item);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logs.Events.LogError(ex, $"Error while calling event async handler");
+                    }
+                }
+            }
+
+            public void Dispose()
+            {
+                Unsubscribe();
+            }
+
+            public void Unsubscribe()
+            {
+                _innerSubscription.Unsubscribe();
+                _evts.Writer.TryComplete();
+            }
+        }
+        public IEventAggregatorSubscription SubscribeAsync<T>(Func<T, Task> subscription)
+        {
+            Channel<T> evts = Channel.CreateUnbounded<T>();
+            var innerSubscription = Subscribe(new Action<IEventAggregatorSubscription, T>((sub, t) => evts.Writer.TryWrite(t)));
+            return new ChannelSubscription<T>(evts, innerSubscription, subscription, Logs);
+        }
         public IEventAggregatorSubscription Subscribe<T>(Action<T> subscription)
         {
             return Subscribe(new Action<IEventAggregatorSubscription, T>((sub, t) => subscription(t)));

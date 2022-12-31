@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using BTCPayServer.Abstractions.Contracts;
 using BTCPayServer.Configuration;
 using BTCPayServer.Storage.Services;
 using BTCPayServer.Storage.Services.Providers;
@@ -11,6 +12,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NBitcoin.Logging;
 
 namespace BTCPayServer.Storage
@@ -21,46 +23,36 @@ namespace BTCPayServer.Storage
         {
             serviceCollection.AddSingleton<StoredFileRepository>();
             serviceCollection.AddSingleton<FileService>();
-            //            serviceCollection.AddSingleton<IStorageProviderService, AmazonS3FileProviderService>();
+            serviceCollection.AddSingleton<IFileService>(provider => provider.GetRequiredService<FileService>());
             serviceCollection.AddSingleton<IStorageProviderService, AzureBlobStorageFileProviderService>();
             serviceCollection.AddSingleton<IStorageProviderService, FileSystemFileProviderService>();
-            //            serviceCollection.AddSingleton<IStorageProviderService, GoogleCloudStorageFileProviderService>();
         }
 
-        public static void UseProviderStorage(this IApplicationBuilder builder, BTCPayServerOptions options)
+        public static void UseProviderStorage(this IApplicationBuilder builder, IOptions<DataDirectories> datadirs)
         {
             try
             {
-                var dir = FileSystemFileProviderService.GetStorageDir(options);
-                var tmpdir = FileSystemFileProviderService.GetTempStorageDir(options);
-                DirectoryInfo dirInfo;
-                if (!Directory.Exists(dir))
+                var dirInfo = Directory.Exists(datadirs.Value.StorageDir)
+                    ? new DirectoryInfo(datadirs.Value.StorageDir)
+                    : Directory.CreateDirectory(datadirs.Value.StorageDir);
+                
+                if (!Directory.Exists(datadirs.Value.TempDir))
                 {
-                    dirInfo = Directory.CreateDirectory(dir);
-                }
-                else
-                {
-                    dirInfo = new DirectoryInfo(dir);
+                    Directory.CreateDirectory(datadirs.Value.TempDir);
                 }
 
-                DirectoryInfo tmpdirInfo;
-                if (!Directory.Exists(tmpdir))
-                {
-                    tmpdirInfo = Directory.CreateDirectory(tmpdir);
-                }
-                else
-                {
-                    tmpdirInfo = new DirectoryInfo(tmpdir);
-                }
+                var tmpdirInfo = Directory.Exists(datadirs.Value.TempStorageDir)
+                    ? new DirectoryInfo(datadirs.Value.TempStorageDir)
+                    : Directory.CreateDirectory(datadirs.Value.TempStorageDir);
 
-                builder.UseStaticFiles(new StaticFileOptions()
+                builder.UseStaticFiles(new StaticFileOptions
                 {
                     ServeUnknownFileTypes = true,
                     RequestPath = new PathString($"/{FileSystemFileProviderService.LocalStorageDirectoryName}"),
                     FileProvider = new PhysicalFileProvider(dirInfo.FullName),
                     OnPrepareResponse = HandleStaticFileResponse()
                 });
-                builder.UseStaticFiles(new StaticFileOptions()
+                builder.UseStaticFiles(new StaticFileOptions
                 {
                     ServeUnknownFileTypes = true,
                     RequestPath = new PathString($"/{FileSystemFileProviderService.LocalStorageDirectoryName}tmp"),
@@ -71,7 +63,7 @@ namespace BTCPayServer.Storage
             }
             catch (Exception e)
             {
-                Logs.Utils.LogError(e, $"Could not initialize the Local File Storage system(uploading and storing files locally)");
+                Logs.Utils.LogError(e, "Could not initialize the Local File Storage system (for uploading and storing files locally)");
             }
         }
 

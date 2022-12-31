@@ -1,4 +1,7 @@
+#nullable enable
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
 namespace BTCPayServer.Payments
 {
@@ -8,17 +11,20 @@ namespace BTCPayServer.Payments
     /// </summary>
     public class PaymentMethodId
     {
+        public PaymentMethodId? FindNearest(PaymentMethodId[] others)
+        {
+            ArgumentNullException.ThrowIfNull(others);
+            return others.FirstOrDefault(f => f == this) ??
+                   others.FirstOrDefault(f => f.CryptoCode == CryptoCode);
+        }
         public PaymentMethodId(string cryptoCode, PaymentType paymentType)
         {
-            if (cryptoCode == null)
-                throw new ArgumentNullException(nameof(cryptoCode));
-            if (paymentType == null)
-                throw new ArgumentNullException(nameof(paymentType));
+            ArgumentNullException.ThrowIfNull(cryptoCode);
+            ArgumentNullException.ThrowIfNull(paymentType);
             PaymentType = paymentType;
             CryptoCode = cryptoCode.ToUpperInvariant();
         }
 
-        [Obsolete("Should only be used for legacy stuff")]
         public bool IsBTCOnChain
         {
             get
@@ -31,23 +37,22 @@ namespace BTCPayServer.Payments
         public PaymentType PaymentType { get; private set; }
 
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            PaymentMethodId item = obj as PaymentMethodId;
-            if (item == null)
-                return false;
-            return ToString().Equals(item.ToString(), StringComparison.InvariantCulture);
+            if (obj is PaymentMethodId id)
+                return ToString().Equals(id.ToString(), StringComparison.OrdinalIgnoreCase);
+            return false;
         }
-        public static bool operator ==(PaymentMethodId a, PaymentMethodId b)
+        public static bool operator ==(PaymentMethodId? a, PaymentMethodId? b)
         {
-            if (System.Object.ReferenceEquals(a, b))
+            if (a is null && b is null)
                 return true;
-            if (((object)a == null) || ((object)b == null))
-                return false;
-            return a.ToString() == b.ToString();
+            if (a is PaymentMethodId ai && b is PaymentMethodId bi)
+                return ai.Equals(bi);
+            return false;
         }
 
-        public static bool operator !=(PaymentMethodId a, PaymentMethodId b)
+        public static bool operator !=(PaymentMethodId? a, PaymentMethodId? b)
         {
             return !(a == b);
         }
@@ -75,6 +80,8 @@ namespace BTCPayServer.Payments
 #if ALTCOINS
             if (CryptoCode == "XMR" && PaymentType == PaymentTypes.MoneroLike)
                 return CryptoCode;
+            if ((CryptoCode == "YEC" || CryptoCode == "ZEC") && PaymentType == PaymentTypes.ZcashLike)
+                return CryptoCode;
 #endif
             return $"{CryptoCode}-{PaymentType.ToStringNormalized()}";
         }
@@ -84,7 +91,12 @@ namespace BTCPayServer.Payments
             return $"{CryptoCode} ({PaymentType.ToPrettyString()})";
         }
         static char[] Separators = new[] { '_', '-' };
-        public static bool TryParse(string str, out PaymentMethodId paymentMethodId)
+        public static PaymentMethodId? TryParse(string? str)
+        {
+            TryParse(str, out var r);
+            return r;
+        }
+        public static bool TryParse(string? str, [MaybeNullWhen(false)] out PaymentMethodId paymentMethodId)
         {
             str ??= "";
             paymentMethodId = null;
@@ -95,6 +107,8 @@ namespace BTCPayServer.Payments
 #if ALTCOINS
             if (parts[0].ToUpperInvariant() == "XMR")
                 type = PaymentTypes.MoneroLike;
+            if (parts[0].ToUpperInvariant() == "ZEC")
+                type = PaymentTypes.ZcashLike;
 #endif
             if (parts.Length == 2)
             {

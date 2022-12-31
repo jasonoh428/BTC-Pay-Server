@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using BTCPayServer.Data;
 
 namespace BTCPayServer.Events
@@ -8,5 +9,7 @@ namespace BTCPayServer.Events
         public ApplicationUser User { get; set; }
         public bool Admin { get; set; }
         public Uri RequestUri { get; set; }
+
+        public TaskCompletionSource<Uri> CallbackUrlGenerated;
     }
 }

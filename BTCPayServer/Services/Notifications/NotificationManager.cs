@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using BTCPayServer.Components.NotificationsDropdown;
+using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Components.Notifications;
 using BTCPayServer.Data;
-using BTCPayServer.Models.NotificationViewModels;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -20,7 +20,6 @@ namespace BTCPayServer.Services.Notifications
         private readonly IMemoryCache _memoryCache;
         private readonly EventAggregator _eventAggregator;
         private readonly Dictionary<string, INotificationHandler> _handlersByNotificationType;
-        private readonly Dictionary<Type, INotificationHandler> _handlersByBlobType;
 
         public NotificationManager(ApplicationDbContextFactory factory, UserManager<ApplicationUser> userManager,
             IMemoryCache memoryCache, IEnumerable<INotificationHandler> handlers, EventAggregator eventAggregator)
@@ -30,30 +29,38 @@ namespace BTCPayServer.Services.Notifications
             _memoryCache = memoryCache;
             _eventAggregator = eventAggregator;
             _handlersByNotificationType = handlers.ToDictionary(h => h.NotificationType);
-            _handlersByBlobType = handlers.ToDictionary(h => h.NotificationBlobType);
         }
 
         private const int _cacheExpiryMs = 5000;
 
-        public async Task<NotificationSummaryViewModel> GetSummaryNotifications(ClaimsPrincipal user)
+        public async Task<NotificationsViewModel> GetSummaryNotifications(ClaimsPrincipal user)
         {
             var userId = _userManager.GetUserId(user);
             var cacheKey = GetNotificationsCacheId(userId);
-            if (_memoryCache.TryGetValue<NotificationSummaryViewModel>(cacheKey, out var obj))
-                return obj;
 
-            var resp = await FetchNotificationsFromDb(userId);
-            _memoryCache.Set(cacheKey, resp,
-                new MemoryCacheEntryOptions().SetAbsoluteExpiration(TimeSpan.FromMilliseconds(_cacheExpiryMs)));
-
-            return resp;
+            return await _memoryCache.GetOrCreateAsync(cacheKey, async entry =>
+            {
+                var resp = await GetNotifications(new NotificationsQuery()
+                {
+                    Seen = false,
+                    Skip = 0,
+                    Take = 5,
+                    UserId = userId
+                });
+                entry.SetAbsoluteExpiration(TimeSpan.FromMilliseconds(_cacheExpiryMs));
+                var res = new NotificationsViewModel { Last5 = resp.Items, UnseenCount = resp.Count.Value };
+                entry.Value = res;
+                return res;
+            });
         }
 
-        public void InvalidateNotificationCache(string userId)
+        public void InvalidateNotificationCache(params string[] userIds)
         {
-            _memoryCache.Remove(GetNotificationsCacheId(userId));
-
-            _eventAggregator.Publish(new UserNotificationsUpdatedEvent() { UserId = userId });
+            foreach (var userId in userIds)
+            {
+                _memoryCache.Remove(GetNotificationsCacheId(userId));
+                _eventAggregator.Publish(new UserNotificationsUpdatedEvent() { UserId = userId });
+            }
         }
 
         private static string GetNotificationsCacheId(string userId)
@@ -61,50 +68,93 @@ namespace BTCPayServer.Services.Notifications
             return $"notifications-{userId}";
         }
 
-        private async Task<NotificationSummaryViewModel> FetchNotificationsFromDb(string userId)
+        public async Task<(List<NotificationViewModel> Items, int? Count)> GetNotifications(NotificationsQuery query)
         {
-            var resp = new NotificationSummaryViewModel();
-            using (var _db = _factory.CreateContext())
+            await using var dbContext = _factory.CreateContext();
+
+            var queryables = GetNotificationsQueryable(dbContext, query);
+            var items = (await queryables.withPaging.ToListAsync()).Select(ToViewModel).Where(model => model != null).ToList();
+
+            int? count = null;
+            if (query.Seen is false)
             {
-                resp.UnseenCount = _db.Notifications
-                    .Where(a => a.ApplicationUserId == userId && !a.Seen)
-                    .Count();
-
-                if (resp.UnseenCount > 0)
-                {
-                    try
-                    {
-                        resp.Last5 = (await _db.Notifications
-                                .Where(a => a.ApplicationUserId == userId && !a.Seen)
-                                .OrderByDescending(a => a.Created)
-                                .Take(5)
-                                .ToListAsync())
-                            .Select(a => ToViewModel(a))
-                            .ToList();
-                    }
-                    catch (System.IO.InvalidDataException)
-                    {
-                        // invalid notifications that are not pkuzipable, burn them all
-                        var notif = _db.Notifications.Where(a => a.ApplicationUserId == userId);
-                        _db.Notifications.RemoveRange(notif);
-                        _db.SaveChanges();
-
-                        resp.UnseenCount = 0;
-                        resp.Last5 = new List<NotificationViewModel>();
-                    }
-                }
-                else
-                {
-                    resp.Last5 = new List<NotificationViewModel>();
-                }
+                // Unseen notifications aren't likely to be too huge, so count should be fast
+                count = await queryables.withoutPaging.CountAsync();
             }
-
-            return resp;
+            return (Items: items, Count: count);
         }
 
-        public NotificationViewModel ToViewModel(NotificationData data)
+        private (IQueryable<NotificationData> withoutPaging, IQueryable<NotificationData> withPaging)
+            GetNotificationsQueryable(ApplicationDbContext dbContext, NotificationsQuery query)
+        {
+            var queryable = dbContext.Notifications.AsQueryable();
+            if (query.Ids?.Any() is true)
+            {
+                queryable = queryable.Where(data => query.Ids.Contains(data.Id));
+            }
+
+            if (!string.IsNullOrEmpty(query.UserId))
+            {
+                queryable = queryable.Where(data => data.ApplicationUserId == query.UserId);
+            }
+
+            if (query.Seen.HasValue)
+            {
+                queryable = queryable.Where(data => data.Seen == query.Seen);
+            }
+
+            queryable = queryable.OrderByDescending(a => a.Created);
+
+            var queryable2 = queryable;
+            if (query.Skip.HasValue)
+            {
+                queryable2 = queryable.Skip(query.Skip.Value);
+            }
+
+            if (query.Take.HasValue)
+            {
+                queryable2 = queryable.Take(query.Take.Value);
+            }
+
+            return (queryable, queryable2);
+        }
+
+
+        public async Task<List<NotificationViewModel>> ToggleSeen(NotificationsQuery notificationsQuery, bool? setSeen)
+        {
+            await using var dbContext = _factory.CreateContext();
+
+            var queryables = GetNotificationsQueryable(dbContext, notificationsQuery);
+            var items = await queryables.withPaging.ToListAsync();
+            var userIds = items.Select(data => data.ApplicationUserId).Distinct();
+            foreach (var notificationData in items)
+            {
+                notificationData.Seen = setSeen.GetValueOrDefault(!notificationData.Seen);
+            }
+
+            await dbContext.SaveChangesAsync();
+            InvalidateNotificationCache(userIds.ToArray());
+            return items.Select(ToViewModel).Where(model => model != null).ToList();
+        }
+
+        public async Task Remove(NotificationsQuery notificationsQuery)
+        {
+            await using var dbContext = _factory.CreateContext();
+
+            var queryables = GetNotificationsQueryable(dbContext, notificationsQuery);
+            dbContext.RemoveRange(queryables.withPaging);
+            await dbContext.SaveChangesAsync();
+
+            if (!string.IsNullOrEmpty(notificationsQuery.UserId))
+                InvalidateNotificationCache(notificationsQuery.UserId);
+        }
+
+
+        private NotificationViewModel ToViewModel(NotificationData data)
         {
             var handler = GetHandler(data.NotificationType);
+            if (handler is null)
+                return null;
             var notification = JsonConvert.DeserializeObject(ZipUtils.Unzip(data.Blob), handler.NotificationBlobType);
             var obj = new NotificationViewModel { Id = data.Id, Created = data.Created, Seen = data.Seen };
             handler.FillViewModel(notification, obj);
@@ -113,16 +163,17 @@ namespace BTCPayServer.Services.Notifications
 
         public INotificationHandler GetHandler(string notificationId)
         {
-            if (_handlersByNotificationType.TryGetValue(notificationId, out var h))
-                return h;
-            throw new InvalidOperationException($"No INotificationHandler found for {notificationId}");
+            _handlersByNotificationType.TryGetValue(notificationId, out var h);
+            return h;
         }
+    }
 
-        public INotificationHandler GetHandler(Type blobType)
-        {
-            if (_handlersByBlobType.TryGetValue(blobType, out var h))
-                return h;
-            throw new InvalidOperationException($"No INotificationHandler found for {blobType.Name}");
-        }
+    public class NotificationsQuery
+    {
+        public string[] Ids { get; set; }
+        public string UserId { get; set; }
+        public int? Skip { get; set; }
+        public int? Take { get; set; }
+        public bool? Seen { get; set; }
     }
 }

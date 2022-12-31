@@ -1,9 +1,11 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <TargetFramework Condition="'$(TargetFrameworkOverride)' != ''">$(TargetFrameworkOverride)</TargetFramework>
-    <NoWarn>NU1701,CA1816,CA1308,CA1810,CA2208,CA1303,CA2000</NoWarn>
-    <LangVersion>8.0</LangVersion>
+    <NoWarn>NU1701,CA1816,CA1308,CA1810,CA2208,CA1303,CA2000,CA2016,CA1835,CA2249,CA9998,CA1704</NoWarn>
+    <LangVersion>10.0</LangVersion>
+    <EnableNETAnalyzers>True</EnableNETAnalyzers>
+    <AnalysisLevel>6.0</AnalysisLevel>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -22,9 +24,8 @@
   </PropertyGroup>
   <!-- -->
 
-  <PropertyGroup Condition="( '$(Configuration)' == 'Debug' Or '$(Configuration)' == 'Altcoins-Debug') And '$(RazorCompileOnBuild)' != 'true'">
+  <PropertyGroup Condition="( '$(Configuration)' == 'Debug' Or '$(Configuration)' == 'Altcoins-Debug') And '$(RazorCompileOnBuild)' != 'true' And '$(DotNetWatchBuild)' != 'true' And '$(DesignTimeBuild)' != 'true'">
     <RazorCompileOnBuild>false</RazorCompileOnBuild>
-    <DefineConstants>$(DefineConstants);RAZOR_RUNTIME_COMPILE</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Altcoins)' == 'true'">
